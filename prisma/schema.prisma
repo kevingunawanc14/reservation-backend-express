@@ -10,8 +10,61 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
 model Product {
   id Int @id @default(autoincrement())
   name String
+  password String
+  phoneNumber String
+}
+
+model User {
+  id      Int      @id @default(autoincrement())
+  username String  @unique
+  password String 
+  phoneNumber    String
+  email   String? @default("abc@gmail.com")  
+  roles Json?
+  healthPoint Int? @default(0)
+  refreshToken String?
+}
+
+model Order{
+  id         Int        @id @default(autoincrement())
+  title      String
+  authorId   Int
+}
+
+model Court{
+  id   Int      @id @default(autoincrement())
+  name String 
+  gor Int
+  price Int
+}
+
+model Rating{
+  id      Int      @id @default(autoincrement())
+  score   Int
+}
+
+model Membership{
+  id      Int      @id @default(autoincrement())
+
+}
+
+model Avatar{
+  id      Int      @id @default(autoincrement())
+
+}
+
+model Challange{
+  id      Int      @id @default(autoincrement())
+
+}
+
+model Journal{
+  id      Int      @id @default(autoincrement())
+  healthPoint Int  
+  idUser Int
+  createdAt  DateTime   @default(now())
+
 }
