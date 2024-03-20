@@ -276,62 +276,358 @@ app.get('/detail', async (req, res) => {
     }
 });
 
-app.get("/api", (req, res) => {
-    res.send("Hello World test");
-})
+app.get('/dashboard', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
 
-app.get("/products", async (req, res) => {
-    const products = await prisma.product.findMany();
+        const totalReservationsToday = await prisma.order.count({
+            where: {
+                createdAt: {
+                    gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+                    lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+                }
+            }
+        });
 
-    res.send(products);
-})
+        const totalReservationsYesterday = await prisma.order.count({
+            where: {
+                createdAt: {
+                    gte: new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate()),
+                    lt: new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate() + 1)
+                }
+            }
+        });
 
-app.post("/products", async (req, res) => {
+        console.log(totalReservationsToday, totalReservationsYesterday)
 
-    const newProductData = req.body;
-    console.log(newProductData, 'x');
-    const products = await prisma.product.create({
-        data: {
-            name: newProductData.name,
+        const percentageTodayCompareYesterday = ((totalReservationsToday - totalReservationsYesterday) / totalReservationsYesterday) * 100;
+
+        const resultReservation = [totalReservationsToday, percentageTodayCompareYesterday];
+
+        const totalRevenueToday = await prisma.order.aggregate({
+            _sum: {
+                totalPrice: true
+            },
+            where: {
+                createdAt: {
+                    gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+                    lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+                }
+            }
+        });
+
+        const totalRevenueYesterday = await prisma.order.aggregate({
+            _sum: {
+                totalPrice: true
+            },
+            where: {
+                createdAt: {
+                    gte: new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate()),
+                    lt: new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate() + 1)
+                }
+            }
+        });
+
+        const percentageRevenueTodayCompareYesterday = ((totalRevenueToday._sum.revenue - totalRevenueYesterday._sum.revenue) / totalRevenueYesterday._sum.revenue) * 100;
+
+        const resultRevenue = [totalRevenueToday._sum.revenue, percentageRevenueTodayCompareYesterday];
+
+        const totalReservations = resultReservation;
+        const totalRevenue = resultRevenue
+        const totalProductsBySport = null
+        const totalOrdersLast10Months = null
+        const totalIncomeLast10Months = null
+
+        res.json({
+            totalReservations,
+            totalRevenue,
+            totalProductsBySport,
+            totalOrdersLast10Months,
+            totalIncomeLast10Months
+        });
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/dashboard/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const userId = parseInt(req.params.id);
+        console.log('userId', userId)
+        const user = await prisma.user.findUnique({
+            where: {
+                id: productId
+            }
+        });
+
+        console.log('user', user)
+
+        if (!user) {
+            return res.status(404).json({ error: 'Product not found' });
         }
-    });
 
-    res.send({
-        data: products,
-        message: "success"
-    });
-})
-
-app.get('/users', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    try {
-        const users = await prisma.user.findMany();
-        res.json(users);
+        res.json(user);
     } catch (error) {
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
-app.get('/courts', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.post('/dashboard/add', async (req, res) => {
+    const { username, password } = req.body;
+
     try {
-        const users = await prisma.user.findMany();
-        res.json(users);
+        const newUser = await prisma.user.create({
+            data: {
+                username,
+                password
+            }
+        });
+
+        res.status(201).json({ message: 'User added successfully', product: newUser });
+    } catch (error) {
+        console.error('Error adding user:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.post('/dashboard/:id/update', async (req, res) => {
+    const productId = parseInt(req.params.id);
+    const { name, gor, price } = req.body; // Assuming these are the fields you want to update
+
+    try {
+        const existingProduct = await prisma.product.findUnique({
+            where: { id: productId }
+        });
+
+        if (!existingProduct) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        const updateProduct = await prisma.product.update({
+            where: { id: productId },
+            data: {
+                name: name || existingProduct.name,
+                gor: gor || existingProduct.gor,
+                price: price || existingProduct.price,
+            }
+        });
+
+        res.json({ message: 'Product updated successfully', product: updateProduct });
+    } catch (error) {
+        console.log('error', error)
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.delete('/dashboard/:id', async (req, res) => {
+    const productId = parseInt(req.params.id);
+    console.log('productId', productId)
+    try {
+        const existingProduct = await prisma.product.findUnique({
+            where: { id: productId }
+        });
+
+        if (!existingProduct) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        await prisma.product.delete({
+            where: { id: productId }
+        });
+
+        res.json({ message: 'Product deleted successfully' });
     } catch (error) {
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
-app.delete('/users/:id', async (req, res) => {
+app.get('/order', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const order = await prisma.order.findMany();
+        res.json(order);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/order/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const orderId = parseInt(req.params.id);
+        const order = await prisma.order.findUnique({
+            where: {
+                id: orderId
+            }
+        });
+
+        if (!order) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        res.json(order);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.post('/order/add', async (req, res) => {
+    const { paymentMethod, paymentStatus } = req.body;
+
+    try {
+        const newOrder = await prisma.order.create({
+            data: {
+                paymentStatus,
+                paymentMethod,
+            }
+        });
+
+        res.status(201).json({ message: 'Order added successfully', order: newOrder });
+    } catch (error) {
+        console.error('Error adding order:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.post('/order/:id/update', async (req, res) => {
+    const orderId = parseInt(req.params.id);
+    console.log(orderId);
+    const { paymentMethod } = req.body; // Assuming these are the fields you want to update
+
+    try {
+        const existingOrder = await prisma.order.findUnique({
+            where: { id: orderId }
+        });
+
+        if (!existingOrder) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+
+        const updateOrder = await prisma.order.update({
+            where: { id: orderId },
+            data: {
+                paymentMethod: paymentMethod || existingOrder.paymentMethod,
+            }
+        });
+
+        res.json({ message: 'Order updated successfully', order: updateOrder });
+    } catch (error) {
+        console.log('error', error)
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.delete('/order/:id', async (req, res) => {
+    const orderId = parseInt(req.params.id);
+    try {
+        const existingOrder = await prisma.order.findUnique({
+            where: { id: orderId }
+        });
+
+        if (!existingOrder) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+
+        await prisma.order.delete({
+            where: { id: orderId }
+        });
+
+        res.json({ message: 'Order deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/user', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const user = await prisma.user.findMany();
+        res.json(user);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/user/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const userId = parseInt(req.params.id);
+        const user = await prisma.user.findUnique({
+            where: {
+                id: userId
+            }
+        });
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json(user);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.post('/user/add', async (req, res) => {
+    const { username, password, phoneNumber } = req.body;
+    console.log(req.body)
+    try {
+        const newUser = await prisma.user.create({
+            data: {
+                username,
+                password,
+                phoneNumber
+            }
+        });
+
+        res.status(201).json({ message: 'User added successfully', product: newUser });
+    } catch (error) {
+        console.error('Error adding user:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.post('/user/:id/update', async (req, res) => {
     const userId = parseInt(req.params.id);
+    const { username, password, phoneNumber } = req.body;
+    console.log(req.body);
     try {
-        // Check if the user exists
         const existingUser = await prisma.user.findUnique({
             where: { id: userId }
         });
+
         if (!existingUser) {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        // Delete the user
+        const updateUser = await prisma.user.update({
+            where: { id: userId },
+            data: {
+                username: username || existingUser.username,
+                password: password,
+                phoneNumber: phoneNumber
+            }
+        });
+
+        res.json({ message: 'User updated successfully', user: updateUser });
+    } catch (error) {
+        console.log('error', error)
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.delete('/user/:id', async (req, res) => {
+    const userId = parseInt(req.params.id);
+    try {
+        const existingUser = await prisma.user.findUnique({
+            where: { id: userId }
+        });
+
+        if (!existingUser) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
         await prisma.user.delete({
             where: { id: userId }
         });
@@ -341,6 +637,209 @@ app.delete('/users/:id', async (req, res) => {
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
+
+app.get('/product', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const product = await prisma.product.findMany();
+        console.log(product);
+        res.json(product);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/product/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const productId = parseInt(req.params.id);
+        console.log('productId', productId)
+        const product = await prisma.product.findUnique({
+            where: {
+                id: productId
+            }
+        });
+
+        console.log('product', product)
+
+        if (!product) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        res.json(product);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.post('/product/add', async (req, res) => {
+    const { name, gor, price } = req.body;
+
+    try {
+        const newProduct = await prisma.product.create({
+            data: {
+                name,
+                gor: parseInt(gor),
+                price
+            }
+        });
+
+        res.status(201).json({ message: 'Product added successfully', product: newProduct });
+    } catch (error) {
+        console.error('Error adding product:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.post('/product/:id/update', async (req, res) => {
+    const productId = parseInt(req.params.id);
+    const { name, gor, price } = req.body; // Assuming these are the fields you want to update
+    console.log(req.body)
+    try {
+        const existingProduct = await prisma.product.findUnique({
+            where: { id: productId }
+        });
+
+        if (!existingProduct) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        const updateProduct = await prisma.product.update({
+            where: { id: productId },
+            data: {
+                name: name || existingProduct.name,
+                gor: parseInt(gor) || existingProduct.gor,
+                price: price || existingProduct.price,
+            }
+        });
+
+        res.json({ message: 'Product updated successfully', product: updateProduct });
+    } catch (error) {
+        console.log('error', error)
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.delete('/product/:id', async (req, res) => {
+    const productId = parseInt(req.params.id);
+    console.log('productId', productId)
+    try {
+        const existingProduct = await prisma.product.findUnique({
+            where: { id: productId }
+        });
+
+        if (!existingProduct) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        await prisma.product.delete({
+            where: { id: productId }
+        });
+
+        res.json({ message: 'Product deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/challenge', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const challange = await prisma.challenge.findMany();
+        console.log(challange);
+        res.json(challange);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/challenge/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const challengeId = parseInt(req.params.id);
+        console.log('challengeId', challengeId)
+        const challenge = await prisma.challenge.findUnique({
+            where: {
+                id: challengeId
+            }
+        });
+
+        console.log('challange', challenge)
+
+        if (!challenge) {
+            return res.status(404).json({ error: 'Challenge not found' });
+        }
+
+        res.json(challenge);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.post('/challenge/add', async (req, res) => {
+    const { description, repeatTime } = req.body;
+
+    try {
+        const newChallenge = await prisma.challenge.create({
+            data: {
+                description,
+                repeatTime
+            }
+        });
+
+        res.status(201).json({ message: 'Challenge added successfully', challenge: newChallenge });
+    } catch (error) {
+        console.error('Error adding challenge:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.post('/challenge/:id/update', async (req, res) => {
+    const challengeId = parseInt(req.params.id);
+    const { description, repeatTime } = req.body; // Assuming these are the fields you want to update
+
+    try {
+        const existingChallenge = await prisma.challenge.findUnique({
+            where: { id: challengeId }
+        });
+
+        if (!existingChallenge) {
+            return res.status(404).json({ error: 'Challenge not found' });
+        }
+
+        const updatedChallenge = await prisma.challenge.update({
+            where: { id: challengeId },
+            data: {
+                description: description || existingChallenge.description,
+                repeatTime: repeatTime || existingChallenge.repeatTime,
+            }
+        });
+
+        res.json({ message: 'Challenge updated successfully', challenge: updatedChallenge });
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.delete('/challenge/:id', async (req, res) => {
+    const challangeId = parseInt(req.params.id);
+    console.log('challangeId', challangeId)
+    try {
+        const existingChallange = await prisma.challenge.findUnique({
+            where: { id: challangeId }
+        });
+
+        if (!existingChallange) {
+            return res.status(404).json({ error: 'Challange not found' });
+        }
+
+        await prisma.challenge.delete({
+            where: { id: challangeId }
+        });
+
+        res.json({ message: 'challenge deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+
 
 app.get('/journals', async (req, res) => {
     try {

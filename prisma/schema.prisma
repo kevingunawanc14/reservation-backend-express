@@ -10,13 +10,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Product {
-  id Int @id @default(autoincrement())
-  name String
-  password String
-  phoneNumber String
-}
-
 model User {
   id      Int      @id @default(autoincrement())
   username String  @unique
@@ -25,21 +18,30 @@ model User {
   email   String? @default("abc@gmail.com")  
   roles Json?
   healthPoint Int? @default(0)
+  rank String? @default("Platinum")
+  theme String? @default("Light")
+  statusPendaftaran String? @default("0")
   refreshToken String?
 }
 
-model Order{
-  id         Int        @id @default(autoincrement())
-  title      String
-  authorId   Int
+model Order {
+  id          Int       @id @default(autoincrement())
+  username    String?
+  productId   Int?
+  totalPrice  Float?
+  createdAt   DateTime?  @default(now())
+  updatedAt   DateTime?  @updatedAt
+  paymentStatus String?
+  paymentMethod String?
 }
 
-model Court{
+model Product{
   id   Int      @id @default(autoincrement())
-  name String 
-  gor Int
-  price Int
+  name String? 
+  gor Int?
+  price String?
 }
+
 
 model Rating{
   id      Int      @id @default(autoincrement())
@@ -48,6 +50,7 @@ model Rating{
 
 model Membership{
   id      Int      @id @default(autoincrement())
+  type? String
 
 }
 
@@ -56,9 +59,10 @@ model Avatar{
 
 }
 
-model Challange{
-  id      Int      @id @default(autoincrement())
-
+model Challenge{
+  id   Int      @id @default(autoincrement())
+  description String 
+  repeatTime String
 }
 
 model Journal{
