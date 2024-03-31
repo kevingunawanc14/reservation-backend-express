@@ -13,13 +13,16 @@ const cookieParser = require('cookie-parser');
 const bcrypt = require('bcrypt');
 
 
-const verifyJWT = (req, res, next) => {
-    const authHeader = req.headers.authorization || req.headers.Authorization;
-    if (!authHeader?.startsWith('Bearer ')) return res.sendStatus(401);
-    const token = authHeader.split(' ')[1];
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization']
+
+    const token = authHeader && authHeader.split(' ')[1]
+
+    if (token == null) return res.sendStatus(401)
+
     jwt.verify(
         token,
-        process.env.ACCESS_TOKEN_SECRET,
+        process.env.TOKEN_SECRET,
         (err, decoded) => {
             if (err) return res.sendStatus(403); //invalid token
             req.user = decoded.UserInfo.username;
@@ -27,10 +30,13 @@ const verifyJWT = (req, res, next) => {
             next();
         }
     );
+
+
 }
 
 const verifyRoles = (...allowedRoles) => {
     return (req, res, next) => {
+        console.log('req.roles', req.roles);
         if (!req?.roles) return res.sendStatus(401);
         console.log('req.role', req.roles)
         const rolesArray = [...allowedRoles];
@@ -39,6 +45,7 @@ const verifyRoles = (...allowedRoles) => {
         if (!result) return res.sendStatus(401);
         next();
     }
+
 }
 
 const ROLES_LIST = {
@@ -128,124 +135,49 @@ app.post('/login', async (req, res) => {
         if (match) {
             const roles = Object.values(foundUser.roles);
             // create JWTs
-            const accessToken = jwt.sign(
-                {
-                    "UserInfo": {
-                        "username": foundUser.username,
-                        "roles": roles
-                    }
-                },
-                process.env.ACCESS_TOKEN_SECRET,
-                { expiresIn: '30s' }
-            );
-            const refreshToken = jwt.sign(
-                { "username": foundUser.username },
-                process.env.REFRESH_TOKEN_SECRET,
-                { expiresIn: '1d' }
-            );
-            await prisma.user.update({
-                where: {
-                    username: username
-                },
-                data: {
-                    refreshToken: refreshToken
-                }
-            });
-            res.cookie('jwt', refreshToken, { httpOnly: true, sameSite: 'None', secure: true, maxAge: 24 * 60 * 60 * 1000 });
-            res.json({ accessToken, roles });
+            const token = jwt.sign
+                (
+                    {
+                        "UserInfo": {
+                            "username": foundUser.username,
+                            "roles": roles
+                        }
+                    },
+                    process.env.TOKEN_SECRET,
+                    { expiresIn: '1d' }
+                );
+            res.json({ token });
         } else {
             res.sendStatus(401);
         }
 
     } catch (err) {
+        console.log('err', err)
         res.status(500).json({ 'message': err.message });
     }
 });
 
-app.post('/logout', async (req, res) => {
-    // On client, also delete the accessToken
-    const cookies = req.cookies;
-    if (!cookies?.jwt) return res.sendStatus(204); //No content
-    const refreshToken = cookies.jwt;
-
-    // Is refreshToken in db?
-    const foundUser = await prisma.user.findFirst({
-        where: {
-            refreshToken: refreshToken,
-        },
-    });
-    if (!foundUser) {
-        res.clearCookie('jwt', { httpOnly: true, sameSite: 'None', secure: true });
-        return res.sendStatus(204);
-    }
-
-    // Delete refreshToken in db
-    await prisma.user.update({
-        where: {
-            username: foundUser.username,
-            refreshToken: refreshToken,
-        },
-        data: {
-            refreshToken: '', // Provide the new value for the refresh token here
-        },
-    });
-
-    res.clearCookie('jwt', { httpOnly: true, sameSite: 'None', secure: true });
-    res.sendStatus(204);
-});
-
-app.get('/refresh', async (req, res) => {
-    const cookies = req.cookies
-    if (!cookies?.jwt) return res.status(401);
-    const refreshToken = cookies.jwt;
-    const foundUser = await prisma.user.findFirst({
-        where: {
-            refreshToken: refreshToken,
-        },
-    });
-    if (!foundUser) return res.status(403).json({ message: 'User not found' });
-
-    jwt.verify(
-        refreshToken,
-        process.env.REFRESH_TOKEN_SECRET,
-        (err, decoded) => {
-            if (err || foundUser.username !== decoded.username) return res.sendStatus(403);
-            const roles = Object.values(foundUser.roles);
-            const accessToken = jwt.sign(
-                {
-                    "UserInfo": {
-                        "username": decoded.username,
-                        "roles": roles
-                    }
-                },
-                process.env.ACCESS_TOKEN_SECRET,
-                { expiresIn: '30s' }
-            );
-            res.json({ roles, accessToken })
-        }
-    )
-
-});
-
-app.use(verifyJWT);
+app.use(authenticateToken);
 
 app.get('/search', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    const { query } = req.query;
+    // console.log('req', req);
+    // console.log('query', req);
+    const query = req.query.q
 
-    // Check if name is empty
     if (!query) {
         return res.json([]); // Return empty array
     }
+
     try {
-        const courts = await prisma.court.findMany({
+        const products = await prisma.product.findMany({
             where: {
                 name: {
                     contains: query,
                 }
             }
         });
-        console.log(courts, 'courts')
-        res.json(courts);
+        console.log(products, 'products')
+        res.json(products);
     } catch (error) {
         console.error('Error searching courts:', error);
         res.status(500).json({ error: 'Internal Server Error' });
@@ -446,7 +378,7 @@ app.delete('/dashboard/:id', async (req, res) => {
 
 app.get('/order', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
-        const order = await prisma.order.findMany();
+        const order = await prisma.schedule.findMany();
         res.json(order);
     } catch (error) {
         console.log(error);
@@ -546,6 +478,7 @@ app.get('/user', verifyRoles(ROLES_LIST.User), async (req, res) => {
         const user = await prisma.user.findMany();
         res.json(user);
     } catch (error) {
+        console.log('error', error)
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
@@ -746,6 +679,7 @@ app.get('/challenge', verifyRoles(ROLES_LIST.User), async (req, res) => {
         console.log(challange);
         res.json(challange);
     } catch (error) {
+        console.log('error', error)
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });

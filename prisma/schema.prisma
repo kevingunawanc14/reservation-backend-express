@@ -11,28 +11,33 @@ datasource db {
 }
 
 model User {
-  id      Int      @id @default(autoincrement())
-  username String  @unique
-  password String 
-  phoneNumber    String
-  email   String? @default("abc@gmail.com")  
-  roles Json?
-  healthPoint Int? @default(0)
-  rank String? @default("Platinum")
-  theme String? @default("Light")
-  statusPendaftaran String? @default("0")
-  refreshToken String?
+  id                            Int     @id @default(autoincrement())
+  username                      String  @unique
+  password                      String 
+  phoneNumber                   String
+  email                         String? @default("abc@gmail.com")  
+  roles                         Json?
+  healthPoint                   Int? @default(0)
+  experiencePoint               Int? @default(0)
+  rank                          String? @default("Platinum")
+  theme                         String? @default("Light")
+  digitalCoin                   Int? @default(0)
+  totalJamTantanganMingguan     String? @default("0")
+  totalJamTantanganBulanan      String? @default("0")
+  totalJamTantangan6Bulan       String? @default("0")
 }
 
-model Order {
-  id          Int       @id @default(autoincrement())
-  username    String?
-  productId   Int?
-  totalPrice  Float?
-  createdAt   DateTime?  @default(now())
-  updatedAt   DateTime?  @updatedAt
-  paymentStatus String?
-  paymentMethod String?
+model Schedule {
+  id                            Int       @id @default(autoincrement())
+  idProduct                     Int?
+  username                      String?
+  price                         String?
+  hour                          String?
+  date                          String?
+  paymentStatus                 String?
+  paymentMethod                 String?
+  createdAt                     DateTime?  @default(now())
+  updatedAt                     DateTime?  @updatedAt
 }
 
 model Product{
@@ -50,7 +55,7 @@ model Rating{
 
 model Membership{
   id      Int      @id @default(autoincrement())
-  type? String
+  type String?
 
 }
 
