@@ -17,14 +17,16 @@ model User {
   phoneNumber                   String
   email                         String? @default("abc@gmail.com")  
   roles                         Json?
-  healthPoint                   Int? @default(0)
-  experiencePoint               Int? @default(0)
-  rank                          String? @default("Platinum")
-  theme                         String? @default("Light")
-  digitalCoin                   Int? @default(0)
+  healthPoint                   Int? @default(100)
+  experiencePoint               Int? @default(100)
+  rank                          String? @default("Gold")
+  activeTheme                   String? @default("Light")
+  activeAvatar                  String? @default("gi GiMuscleFat")
+  krakatauCoin                  Int? @default(0)
   totalJamTantanganMingguan     String? @default("0")
   totalJamTantanganBulanan      String? @default("0")
   totalJamTantangan6Bulan       String? @default("0")
+  statusDailyReward             Boolean? @default(false)
 }
 
 model Schedule {
@@ -40,11 +42,21 @@ model Schedule {
   updatedAt                     DateTime?  @updatedAt
 }
 
+model HistoryPayment{
+    id                            Int       @id @default(autoincrement())
+    username                      String?
+    idProduct                     Int?
+    totalPrice                    String?
+    detailOrder                   String?
+    createdAt                     DateTime?  @default(now())
+}
+
 model Product{
   id   Int      @id @default(autoincrement())
   name String? 
   gor Int?
   price String?
+  imagePath String? 
 }
 
 

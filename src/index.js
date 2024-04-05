@@ -11,6 +11,7 @@ const PORT = process.env.PORT;
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const bcrypt = require('bcrypt');
+const cron = require('node-cron');
 
 
 const authenticateToken = (req, res, next) => {
@@ -36,11 +37,10 @@ const authenticateToken = (req, res, next) => {
 
 const verifyRoles = (...allowedRoles) => {
     return (req, res, next) => {
-        console.log('req.roles', req.roles);
         if (!req?.roles) return res.sendStatus(401);
-        console.log('req.role', req.roles)
         const rolesArray = [...allowedRoles];
-        console.log('rolesArray', rolesArray)
+        console.log('roles yang haru dimiliki:', rolesArray)
+        console.log('roles punya anda:', req.roles)
         const result = req.roles.map(role => rolesArray.includes(role)).find(val => val === true);
         if (!result) return res.sendStatus(401);
         next();
@@ -146,7 +146,8 @@ app.post('/login', async (req, res) => {
                     process.env.TOKEN_SECRET,
                     { expiresIn: '1d' }
                 );
-            res.json({ token });
+
+            res.json({ token, username: foundUser.username });
         } else {
             res.sendStatus(401);
         }
@@ -208,66 +209,33 @@ app.get('/detail', async (req, res) => {
     }
 });
 
+app.get('/user/detail/:username', async (req, res) => {
+    try {
+        const username = req.params.username;
+
+        const user = await prisma.user.findUnique({
+            where: {
+                username: username
+            }
+        });
+
+        if (user) {
+            res.json(user);
+        } else {
+            res.status(404).json({ error: 'User not found' });
+        }
+    } catch (error) {
+        console.log('error', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
 app.get('/dashboard', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
-        const today = new Date();
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
 
-        const totalReservationsToday = await prisma.order.count({
-            where: {
-                createdAt: {
-                    gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-                    lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
-                }
-            }
-        });
 
-        const totalReservationsYesterday = await prisma.order.count({
-            where: {
-                createdAt: {
-                    gte: new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate()),
-                    lt: new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate() + 1)
-                }
-            }
-        });
-
-        console.log(totalReservationsToday, totalReservationsYesterday)
-
-        const percentageTodayCompareYesterday = ((totalReservationsToday - totalReservationsYesterday) / totalReservationsYesterday) * 100;
-
-        const resultReservation = [totalReservationsToday, percentageTodayCompareYesterday];
-
-        const totalRevenueToday = await prisma.order.aggregate({
-            _sum: {
-                totalPrice: true
-            },
-            where: {
-                createdAt: {
-                    gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-                    lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
-                }
-            }
-        });
-
-        const totalRevenueYesterday = await prisma.order.aggregate({
-            _sum: {
-                totalPrice: true
-            },
-            where: {
-                createdAt: {
-                    gte: new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate()),
-                    lt: new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate() + 1)
-                }
-            }
-        });
-
-        const percentageRevenueTodayCompareYesterday = ((totalRevenueToday._sum.revenue - totalRevenueYesterday._sum.revenue) / totalRevenueYesterday._sum.revenue) * 100;
-
-        const resultRevenue = [totalRevenueToday._sum.revenue, percentageRevenueTodayCompareYesterday];
-
-        const totalReservations = resultReservation;
-        const totalRevenue = resultRevenue
+        const totalReservations = null;
+        const totalRevenue = null
         const totalProductsBySport = null
         const totalOrdersLast10Months = null
         const totalIncomeLast10Months = null
@@ -280,7 +248,7 @@ app.get('/dashboard', verifyRoles(ROLES_LIST.User), async (req, res) => {
             totalIncomeLast10Months
         });
     } catch (error) {
-        console.log(error)
+        console.log('error', error)
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
@@ -307,7 +275,7 @@ app.get('/dashboard/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.post('/dashboard/add', async (req, res) => {
+app.post('/dashboard/add', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const { username, password } = req.body;
 
     try {
@@ -325,7 +293,7 @@ app.post('/dashboard/add', async (req, res) => {
     }
 });
 
-app.post('/dashboard/:id/update', async (req, res) => {
+app.post('/dashboard/:id/update', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const productId = parseInt(req.params.id);
     const { name, gor, price } = req.body; // Assuming these are the fields you want to update
 
@@ -354,7 +322,7 @@ app.post('/dashboard/:id/update', async (req, res) => {
     }
 });
 
-app.delete('/dashboard/:id', async (req, res) => {
+app.delete('/dashboard/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const productId = parseInt(req.params.id);
     console.log('productId', productId)
     try {
@@ -470,6 +438,46 @@ app.delete('/order/:id', async (req, res) => {
         res.json({ message: 'Order deleted successfully' });
     } catch (error) {
         res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.post('/order', async (req, res) => {
+    try {
+        const { idProduct, username, price, hour, paymentStatus, paymentMethod, totalPrice } = req.body;
+
+        // Create schedule entries for each hour
+        const newSchedules = [];
+        for (const h of hour) {
+            const newSchedule = await prisma.schedule.create({
+                data: {
+                    idProduct: parseInt(idProduct),
+                    username,
+                    price: price.toString(), // Assuming price should be a string
+                    hour: h,
+                    paymentStatus,
+                    paymentMethod,
+                    price: price.toString() // Assuming totalPrice should be a string
+                }
+            });
+            newSchedules.push(newSchedule);
+        }
+
+        res.json(newSchedules);
+
+        // // Insert into HistoryPayment model
+        // const historyPayment = await prisma.historyPayment.create({
+        //     data: {
+        //         idProduct: parseInt(idProduct),
+        //         username,
+        //         totalPrice: parseInt(totalPrice),
+        //         detailOrder: JSON.stringify(req.body), // Storing the entire request body as detailOrder
+        //     },
+        // });
+
+        // res.json({ historyPayment });
+    } catch (error) {
+        console.error('Error inserting data:', error);
+        res.status(500).json({ error: 'Error inserting data' });
     }
 });
 
@@ -784,6 +792,30 @@ app.get('/journals', async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+
+// Update user status to sleep
+const updateStatusToSleep = async () => {
+    try {
+        console.log('test');
+        // Update statusDailyReward for all users
+        const updatedUsers = await prisma.user.updateMany({
+            data: {
+                statusDailyReward: false
+            }
+        });
+
+        console.log('User statusDailyReward updated successfully.');
+    } catch (error) {
+        console.error('Error updating user statusDailyReward:', error);
+    }
+
+};
+
+// Cron job to update user status to sleep every minute
+// cron.schedule('* * * * *', () => {
+//     updateStatusToSleep();
+// });
+
 
 app.listen(PORT, () => {
     console.log("Express API running in port: " + PORT);
