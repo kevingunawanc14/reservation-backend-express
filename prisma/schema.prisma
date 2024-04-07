@@ -27,6 +27,7 @@ model User {
   totalJamTantanganBulanan      String? @default("0")
   totalJamTantangan6Bulan       String? @default("0")
   statusDailyReward             Boolean? @default(false)
+  biayaPendaftaran              Boolean? @default(false)
 }
 
 model Schedule {
@@ -46,6 +47,7 @@ model HistoryPayment{
     id                            Int       @id @default(autoincrement())
     username                      String?
     idProduct                     Int?
+    date                          String?
     totalPrice                    String?
     detailOrder                   String?
     createdAt                     DateTime?  @default(now())
@@ -54,6 +56,7 @@ model HistoryPayment{
 model Product{
   id   Int      @id @default(autoincrement())
   name String? 
+  nameDetail String?
   gor Int?
   price String?
   imagePath String? 

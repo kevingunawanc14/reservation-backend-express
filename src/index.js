@@ -209,6 +209,54 @@ app.get('/detail', async (req, res) => {
     }
 });
 
+app.get('/detail/:productId', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const productId = parseInt(req.params.productId);
+        const product = await prisma.product.findUnique({
+            where: {
+                id: productId
+            }
+        });
+
+        res.json(product);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+})
+app.get('/payment/:username', async (req, res) => {
+
+    const { username } = req.params;
+
+    try {
+        const payments = await prisma.$queryRaw`
+        SELECT
+            hp.id,
+            hp.username,
+            hp.date,
+            hp.totalPrice,
+            hp.detailOrder,
+            hp.createdAt,
+            p.name AS productName
+        FROM
+            HistoryPayment hp
+        LEFT JOIN
+            Product p ON hp.idProduct = p.id
+        WHERE
+            hp.username = ${username}
+        ORDER BY
+            hp.id DESC;
+        `;
+        console.log('x2');
+        // Send response with the retrieved payments
+        res.json(payments);
+    } catch (error) {
+        // Handle errors
+        console.error('Error fetching payments:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 app.get('/user/detail/:username', async (req, res) => {
     try {
         const username = req.params.username;
@@ -443,38 +491,55 @@ app.delete('/order/:id', async (req, res) => {
 
 app.post('/order', async (req, res) => {
     try {
-        const { idProduct, username, price, hour, paymentStatus, paymentMethod, totalPrice } = req.body;
+        const { idProduct, username, price, hour, paymentStatus, paymentMethod, totalPrice, date } = req.body;
 
-        // Create schedule entries for each hour
-        const newSchedules = [];
-        for (const h of hour) {
-            const newSchedule = await prisma.schedule.create({
+        if (!hour) {
+            const result = await prisma.schedule.create({
                 data: {
                     idProduct: parseInt(idProduct),
                     username,
-                    price: price.toString(), // Assuming price should be a string
-                    hour: h,
+                    date,
+                    hour: null,
                     paymentStatus,
                     paymentMethod,
-                    price: price.toString() // Assuming totalPrice should be a string
                 }
             });
-            newSchedules.push(newSchedule);
+
+
+        } else {
+            const newSchedules = [];
+            for (const h of hour) {
+                const newSchedule = await prisma.schedule.create({
+                    data: {
+                        idProduct: parseInt(idProduct),
+                        username,
+                        price: price.toString(),
+                        hour: h,
+                        paymentStatus,
+                        paymentMethod,
+                        price: price.toString()
+                    }
+                });
+                newSchedules.push(newSchedule);
+            }
+
+            res.json(newSchedules);
         }
 
-        res.json(newSchedules);
 
-        // // Insert into HistoryPayment model
-        // const historyPayment = await prisma.historyPayment.create({
-        //     data: {
-        //         idProduct: parseInt(idProduct),
-        //         username,
-        //         totalPrice: parseInt(totalPrice),
-        //         detailOrder: JSON.stringify(req.body), // Storing the entire request body as detailOrder
-        //     },
-        // });
+        const historyPayment = await prisma.historyPayment.create({
+            data: {
+                idProduct: parseInt(idProduct),
+                username,
+                date,
+                totalPrice: String(totalPrice),
+                detailOrder: JSON.stringify(req.body),
+            },
+        });
 
-        // res.json({ historyPayment });
+        console.log('historyPayment', historyPayment);
+        res.status(201).json({ message: 'Order added successfully', order: historyPayment });
+
     } catch (error) {
         console.error('Error inserting data:', error);
         res.status(500).json({ error: 'Error inserting data' });
