@@ -19,6 +19,8 @@ model User {
   roles                         Json?
   healthPoint                   Int? @default(100)
   experiencePoint               Int? @default(100)
+  attackPoint                   Int? @default(0)
+  defensePoint                  Int? @default(0)
   rank                          String? @default("Gold")
   activeTheme                   String? @default("Light")
   activeAvatar                  String? @default("gi GiMuscleFat")
@@ -39,6 +41,7 @@ model Schedule {
   date                          String?
   paymentStatus                 String?
   paymentMethod                 String?
+  connectHistory                String?
   createdAt                     DateTime?  @default(now())
   updatedAt                     DateTime?  @updatedAt
 }
@@ -49,7 +52,11 @@ model HistoryPayment{
     idProduct                     Int?
     date                          String?
     totalPrice                    String?
+    paymentMethod                 String?
+    paymentStatus                 String?
+    detailDate                    String?
     detailOrder                   String?
+    connectHistory                String?
     createdAt                     DateTime?  @default(now())
 }
 
@@ -60,12 +67,17 @@ model Product{
   gor Int?
   price String?
   imagePath String? 
+  priceInt Int?
 }
 
 
 model Rating{
   id      Int      @id @default(autoincrement())
-  score   Int
+  idProduct Int
+  username  String
+  rating    Int
+  description String
+  idPayment Int
 }
 
 model Membership{

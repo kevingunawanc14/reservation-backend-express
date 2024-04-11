@@ -18,6 +18,7 @@ const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization']
 
     const token = authHeader && authHeader.split(' ')[1]
+    console.log('token', token);
 
     if (token == null) return res.sendStatus(401)
 
@@ -185,6 +186,44 @@ app.get('/search', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
+app.post('/claim-reward/:username', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    const username = req.params.username;
+    const { valueReward, tipe } = req.body;
+
+    try {
+        let fieldToUpdate;
+        switch (tipe) {
+            case 1:
+                fieldToUpdate = 'experiencePoint';
+                break;
+            case 2:
+                fieldToUpdate = 'healthPoint';
+                break;
+            case 3:
+                fieldToUpdate = 'attackPoint';
+                break;
+            case 4:
+                fieldToUpdate = 'defensePoint';
+                break;
+            default:
+                return res.status(400).send('Invalid reward type');
+        }
+        // Update user status to true and health
+        const updatedUser = await prisma.user.update({
+            where: { username },
+            data: {
+                statusDailyReward: true,
+                [fieldToUpdate]: valueReward
+            }
+        });
+
+        res.status(200).json(updatedUser);
+    } catch (error) {
+        console.error('Error occurred:', error);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
 app.get('/detail', async (req, res) => {
     const { name } = req.query;
     console.log('name', name)
@@ -224,6 +263,7 @@ app.get('/detail/:productId', verifyRoles(ROLES_LIST.User), async (req, res) => 
         res.status(500).json({ error: 'Internal Server Error' });
     }
 })
+
 app.get('/payment/:username', async (req, res) => {
 
     const { username } = req.params;
@@ -231,12 +271,7 @@ app.get('/payment/:username', async (req, res) => {
     try {
         const payments = await prisma.$queryRaw`
         SELECT
-            hp.id,
-            hp.username,
-            hp.date,
-            hp.totalPrice,
-            hp.detailOrder,
-            hp.createdAt,
+            hp.*,
             p.name AS productName
         FROM
             HistoryPayment hp
@@ -247,7 +282,6 @@ app.get('/payment/:username', async (req, res) => {
         ORDER BY
             hp.id DESC;
         `;
-        console.log('x2');
         // Send response with the retrieved payments
         res.json(payments);
     } catch (error) {
@@ -394,6 +428,22 @@ app.delete('/dashboard/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
 
 app.get('/order', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
+        // const order = await prisma.schedule.findMany();
+        const order = await prisma.$queryRaw`
+            SELECT p.nameDetail AS productName, hp.*
+            FROM Product p
+            INNER JOIN HistoryPayment hp ON p.id = hp.idProduct
+            ORDER BY hp.id DESC;
+        `;
+        res.json(order);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/order/reserved', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
         const order = await prisma.schedule.findMany();
         res.json(order);
     } catch (error) {
@@ -403,19 +453,40 @@ app.get('/order', verifyRoles(ROLES_LIST.User), async (req, res) => {
 });
 
 app.get('/order/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
+
     try {
         const orderId = parseInt(req.params.id);
-        const order = await prisma.order.findUnique({
-            where: {
-                id: orderId
-            }
-        });
-
+        const order = await prisma.$queryRaw`
+            SELECT p.name AS productName, hp.*
+            FROM Product p
+            INNER JOIN HistoryPayment hp ON p.id = hp.idProduct
+            WHERE hp.id = ${orderId}
+            ORDER BY hp.id DESC;
+        `;
         if (!order) {
             return res.status(404).json({ error: 'Product not found' });
         }
 
         res.json(order);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/order/detail/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const connectHistory = req.params.id;
+        console.log(connectHistory);
+        const detailOrder = await prisma.$queryRaw`
+            SELECT * FROM schedule
+            WHERE connectHistory = ${connectHistory};
+        `;
+        if (!detailOrder) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+        console.log('detailOrder', detailOrder);
+        res.json(detailOrder);
     } catch (error) {
         console.log(error);
         res.status(500).json({ error: 'Internal Server Error' });
@@ -442,11 +513,10 @@ app.post('/order/add', async (req, res) => {
 
 app.post('/order/:id/update', async (req, res) => {
     const orderId = parseInt(req.params.id);
-    console.log(orderId);
-    const { paymentMethod } = req.body; // Assuming these are the fields you want to update
+    const { paymentMethod, paymentStatus } = req.body; // Assuming these are the fields you want to update
 
     try {
-        const existingOrder = await prisma.order.findUnique({
+        const existingOrder = await prisma.historyPayment.findUnique({
             where: { id: orderId }
         });
 
@@ -454,10 +524,11 @@ app.post('/order/:id/update', async (req, res) => {
             return res.status(404).json({ error: 'Order not found' });
         }
 
-        const updateOrder = await prisma.order.update({
+        const updateOrder = await prisma.historyPayment.update({
             where: { id: orderId },
             data: {
-                paymentMethod: paymentMethod || existingOrder.paymentMethod,
+                paymentStatus,
+                paymentMethod,
             }
         });
 
@@ -471,7 +542,7 @@ app.post('/order/:id/update', async (req, res) => {
 app.delete('/order/:id', async (req, res) => {
     const orderId = parseInt(req.params.id);
     try {
-        const existingOrder = await prisma.order.findUnique({
+        const existingOrder = await prisma.historyPayment.findUnique({
             where: { id: orderId }
         });
 
@@ -479,7 +550,7 @@ app.delete('/order/:id', async (req, res) => {
             return res.status(404).json({ error: 'Order not found' });
         }
 
-        await prisma.order.delete({
+        await prisma.historyPayment.delete({
             where: { id: orderId }
         });
 
@@ -491,8 +562,8 @@ app.delete('/order/:id', async (req, res) => {
 
 app.post('/order', async (req, res) => {
     try {
-        const { idProduct, username, price, hour, paymentStatus, paymentMethod, totalPrice, date } = req.body;
-
+        const { idProduct, username, price, hour, paymentStatus, paymentMethod, totalPrice, date, detailDate, connectHistory } = req.body;
+        console.log('detailDate', detailDate)
         if (!hour) {
             const result = await prisma.schedule.create({
                 data: {
@@ -502,28 +573,29 @@ app.post('/order', async (req, res) => {
                     hour: null,
                     paymentStatus,
                     paymentMethod,
+                    connectHistory
                 }
             });
-
-
         } else {
-            const newSchedules = [];
-            for (const h of hour) {
+            const sortedHours = hour.sort((a, b) => {
+                const [aStart] = a.split('-');
+                const [bStart] = b.split('-');
+                return parseFloat(aStart) - parseFloat(bStart);
+            });
+            for (const h of sortedHours) {
                 const newSchedule = await prisma.schedule.create({
                     data: {
                         idProduct: parseInt(idProduct),
                         username,
-                        price: price.toString(),
                         hour: h,
+                        date,
                         paymentStatus,
                         paymentMethod,
-                        price: price.toString()
+                        connectHistory
                     }
                 });
-                newSchedules.push(newSchedule);
             }
 
-            res.json(newSchedules);
         }
 
 
@@ -532,6 +604,10 @@ app.post('/order', async (req, res) => {
                 idProduct: parseInt(idProduct),
                 username,
                 date,
+                paymentMethod,
+                paymentStatus,
+                detailDate,
+                connectHistory,
                 totalPrice: String(totalPrice),
                 detailOrder: JSON.stringify(req.body),
             },
@@ -539,6 +615,73 @@ app.post('/order', async (req, res) => {
 
         console.log('historyPayment', historyPayment);
         res.status(201).json({ message: 'Order added successfully', order: historyPayment });
+
+    } catch (error) {
+        console.error('Error inserting data:', error);
+        res.status(500).json({ error: 'Error inserting data' });
+    }
+});
+
+app.get('/ratings/:idProduct', async (req, res) => {
+    const { idProduct } = req.params;
+    try {
+        const ratings = await prisma.rating.findMany({
+            where: {
+                idProduct: parseInt(idProduct) // Convert idProduct to integer
+            }
+        });
+        res.json(ratings);
+    } catch (error) {
+        console.error('Error fetching ratings:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+
+app.post('/rating', async (req, res) => {
+    try {
+        const { idProduct, username, rating, description, idPayment } = req.body;
+
+        const newRating = await prisma.rating.create({
+            data: {
+                idProduct: parseInt(idProduct),
+                username,
+                rating: parseInt(rating),
+                description,
+                idPayment: parseInt(idPayment),
+            },
+        });
+
+        res.status(201).json({ message: 'Rating added successfully', rating: newRating });
+
+    } catch (error) {
+        console.error('Error inserting data:', error);
+        res.status(500).json({ error: 'Error inserting data' });
+    }
+});
+
+app.get('/rating/:username/:idPayment', async (req, res) => {
+    try {
+        const { username, idPayment } = req.params;
+
+
+        // Check if the combination of username and idPayment exists
+        const existingRating = await prisma.rating.findFirst({
+            where: {
+                username: username,
+                idPayment: parseInt(idPayment)
+            }
+        });
+
+        // Check if existingRating exists
+        if (existingRating) {
+            // If existingRating is found, return status true along with existingRating
+            res.json({ status: true, existingRating });
+        } else {
+            // If existingRating is not found, return status false
+            res.json({ status: false });
+        }
+
 
     } catch (error) {
         console.error('Error inserting data:', error);
@@ -846,8 +989,6 @@ app.delete('/challenge/:id', async (req, res) => {
     }
 });
 
-
-
 app.get('/journals', async (req, res) => {
     try {
         const journals = await prisma.journal.findMany();
@@ -859,10 +1000,8 @@ app.get('/journals', async (req, res) => {
 });
 
 // Update user status to sleep
-const updateStatusToSleep = async () => {
+const updateStatusDailyReward = async () => {
     try {
-        console.log('test');
-        // Update statusDailyReward for all users
         const updatedUsers = await prisma.user.updateMany({
             data: {
                 statusDailyReward: false
@@ -877,9 +1016,9 @@ const updateStatusToSleep = async () => {
 };
 
 // Cron job to update user status to sleep every minute
-// cron.schedule('* * * * *', () => {
-//     updateStatusToSleep();
-// });
+cron.schedule('*/5 * * * *', () => {
+    updateStatusDailyReward();
+});
 
 
 app.listen(PORT, () => {
