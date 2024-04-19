@@ -12,6 +12,7 @@ const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const bcrypt = require('bcrypt');
 const cron = require('node-cron');
+const { use } = require("bcrypt/promises");
 
 
 const authenticateToken = (req, res, next) => {
@@ -186,6 +187,33 @@ app.get('/search', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
+app.get('/progressive-challange/:username', async (req, res) => {
+    const { username } = req.params;
+    try {
+        // Get all schedules for the provided username
+        const schedules = await prisma.schedule.findMany({
+            where: {
+                username: username
+            }
+        });
+
+        // Count the number of schedules for the provided username
+        const scheduleCount = await prisma.schedule.count({
+            where: {
+                username: username
+            }
+        });
+
+        res.status(200).json({
+            schedules: schedules,
+            scheduleCount: scheduleCount
+        });
+    } catch (error) {
+        console.error('Error fetching schedule data:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 app.post('/claim-reward/:username', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const username = req.params.username;
     const { valueReward, tipe } = req.body;
@@ -264,6 +292,34 @@ app.get('/detail/:productId', verifyRoles(ROLES_LIST.User), async (req, res) => 
     }
 })
 
+app.get('/journal/:username', async (req, res) => {
+
+    const { username } = req.params;
+
+    try {
+        const payments = await prisma.$queryRaw`
+        SELECT
+            hp.*,
+            p.name AS productName
+        FROM
+            HistoryPayment hp
+        LEFT JOIN
+            Product p ON hp.idProduct = p.id
+        WHERE
+            hp.username = ${username}
+            AND 
+            hp.idProduct NOT IN (16, 17, 18, 19, 20, 21)
+        ORDER BY
+            hp.id DESC;
+        `;
+        // Send response with the retrieved payments
+        res.json(payments);
+    } catch (error) {
+        // Handle errors
+        console.error('Error fetching payments:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 app.get('/payment/:username', async (req, res) => {
 
     const { username } = req.params;
@@ -311,6 +367,142 @@ app.get('/user/detail/:username', async (req, res) => {
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
+
+app.get('/user/detail/stat/:username', async (req, res) => {
+    try {
+        const totalMinuteWorkout = await prisma.schedule.count({
+            where: {
+                idProduct: { lte: 16 }
+            }
+        }); const mostPlayedSport = await prisma.$queryRaw`
+            SELECT s.idProduct, p.name AS productName, COUNT(s.idProduct) AS productCount
+            FROM Schedule s
+            JOIN Product p ON s.idProduct = p.id
+            GROUP BY s.idProduct, p.name
+            ORDER BY productCount DESC
+            LIMIT 1;
+        `;
+        const typeSport = mostPlayedSport[0].idProduct > 16 ? "Individual" : "Team";
+
+        res.status(200).json({
+            totalMinuteWorkout: totalMinuteWorkout,
+            mostPlayedSport: mostPlayedSport[0].productName,
+            typeSport: typeSport
+        });
+
+    } catch (error) {
+        console.log('error', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/user/detail/avatar/:username', async (req, res) => {
+    try {
+        const { username } = req.params;
+
+        // Query the database to find all avatars for the user based on the provided username
+        const userAvatars = await prisma.historyAvatar.findMany({
+            where: {
+                username: username
+            }
+        });
+
+        if (userAvatars.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Send the user's avatar data as a response
+        res.status(200).json(userAvatars);
+    } catch (error) {
+        console.log('error', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/user/detail/achievement/:username', async (req, res) => {
+    const { username } = req.params;
+
+    try {
+        // Get counts for different categories
+        const sumReservation = await prisma.schedule.count({
+            where: {
+                username: username
+            }
+        });
+
+        const sumBadminton = await prisma.schedule.count({
+            where: {
+                username: username,
+                idProduct: {
+                    in: [3, 4, 5, 10, 11, 12, 13]
+                }
+            }
+        });
+
+        const sumFutsal = await prisma.schedule.count({
+            where: {
+                username: username,
+                idProduct: {
+                    in: [2, 9]
+                }
+            }
+        });
+
+        const sumBasketball = await prisma.schedule.count({
+            where: {
+                username: username,
+                idProduct: {
+                    in: [1, 6, 7, 8, 14, 15]
+                }
+            }
+        });
+
+        const sumGym = await prisma.schedule.count({
+            where: {
+                username: username,
+                idProduct: {
+                    in: [20, 21]
+                }
+            }
+        });
+
+        // Send the response with the calculated sums
+        res.json({
+            sumReservation,
+            sumBadminton,
+            sumFutsal,
+            sumBasketball,
+            sumGym
+        });
+    } catch (error) {
+        console.log('error', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.post('/update-theme', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const { activeTheme, username } = req.body;
+        console.log('activeTheme', activeTheme)
+        console.log('username', username)
+
+        const updatedUser = await prisma.user.update({
+            where: {
+                username: username
+            },
+            data: {
+                activeTheme: activeTheme
+            }
+        });
+
+        res.status(200).json(updatedUser);
+
+    } catch (error) {
+        console.log('error', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
 
 app.get('/dashboard', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
@@ -563,7 +755,6 @@ app.delete('/order/:id', async (req, res) => {
 app.post('/order', async (req, res) => {
     try {
         const { idProduct, username, price, hour, paymentStatus, paymentMethod, totalPrice, date, detailDate, connectHistory } = req.body;
-        console.log('detailDate', detailDate)
         if (!hour) {
             const result = await prisma.schedule.create({
                 data: {
@@ -577,23 +768,53 @@ app.post('/order', async (req, res) => {
                 }
             });
         } else {
+            console.log('idProduct', idProduct)
             const sortedHours = hour.sort((a, b) => {
                 const [aStart] = a.split('-');
                 const [bStart] = b.split('-');
                 return parseFloat(aStart) - parseFloat(bStart);
             });
+            console.log('sortedHours', sortedHours);
+
+            // Define mappings for each idProduct
+            const idProductMappings = {
+                1: [2, 3, 4, 5, 6, 7, 1],
+                2: [1, 3, 4, 5, 6, 7, 2],
+                3: [1, 2, 3],
+                4: [1, 2, 4],
+                5: [1, 2, 7, 5],
+                6: [1, 2, 6],
+                7: [1, 2, 7],
+                8: [9, 10, 11, 12, 13, 14, 15, 8],
+                9: [8, 10, 11, 12, 13, 14, 15, 9],
+                10: [8, 9, 14, 10],
+                11: [8, 9, 14, 11],
+                12: [8, 9, 15, 12],
+                13: [8, 9, 15, 13],
+                14: [1, 2, 10, 11, 14],
+                15: [1, 2, 12, 13, 15]
+            };
+
             for (const h of sortedHours) {
-                const newSchedule = await prisma.schedule.create({
-                    data: {
-                        idProduct: parseInt(idProduct),
-                        username,
-                        hour: h,
-                        date,
-                        paymentStatus,
-                        paymentMethod,
-                        connectHistory
-                    }
-                });
+                const idsToInsert = idProductMappings[idProduct];
+                for (const productId of idsToInsert) {
+                    // console.log('productId', typeof productId)
+                    // console.log('idProduct', typeof idProduct)
+                    // if (idProduct === productId) {
+                    //     console.log('sama');
+                    // }
+                    const newSchedule = await prisma.schedule.create({
+                        data: {
+                            idProduct: parseInt(productId),
+                            username: productId === parseInt(idProduct) ? username : undefined,
+                            hour: h,
+                            date,
+                            paymentStatus,
+                            paymentMethod,
+                            connectHistory: productId === parseInt(idProduct) ? connectHistory : null
+                        }
+                    });
+                }
             }
 
         }
@@ -695,6 +916,28 @@ app.get('/user', verifyRoles(ROLES_LIST.User), async (req, res) => {
         res.json(user);
     } catch (error) {
         console.log('error', error)
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/user/ranked', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const users = await prisma.user.findMany({
+            orderBy: {
+                healthPoint: 'desc'
+            }
+        });
+
+        const rankedUsers = users.map((user, index) => {
+            return {
+                ...user,
+                mostHealthPoint: index + 1
+            };
+        });
+
+        res.json(rankedUsers);
+    } catch (error) {
+        console.log('error', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
@@ -1015,10 +1258,10 @@ const updateStatusDailyReward = async () => {
 
 };
 
-// Cron job to update user status to sleep every minute
-cron.schedule('*/5 * * * *', () => {
-    updateStatusDailyReward();
-});
+// Cron job to update user status to sleep every 5 minute
+// cron.schedule('*/2 * * * *', () => {
+//     updateStatusDailyReward();
+// });
 
 
 app.listen(PORT, () => {

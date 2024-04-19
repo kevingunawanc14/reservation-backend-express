@@ -23,11 +23,11 @@ model User {
   defensePoint                  Int? @default(0)
   rank                          String? @default("Gold")
   activeTheme                   String? @default("Light")
-  activeAvatar                  String? @default("gi GiMuscleFat")
+  activeAvatar                  String? @default("GiMuscleFat")
   krakatauCoin                  Int? @default(0)
-  totalJamTantanganMingguan     String? @default("0")
-  totalJamTantanganBulanan      String? @default("0")
-  totalJamTantangan6Bulan       String? @default("0")
+  statusWeeklyChallange         Boolean? @default(false)
+  statusMonthlyChallange        Boolean? @default(false)
+  status6MonthChallange         Boolean? @default(false)
   statusDailyReward             Boolean? @default(false)
   biayaPendaftaran              Boolean? @default(false)
 }
@@ -56,7 +56,20 @@ model HistoryPayment{
     paymentStatus                 String?
     detailDate                    String?
     detailOrder                   String?
+    typeBreath                    String?
+    minuteBreath                  String?
+    totalXp                       String?
+    totalHp                       String?
+    totalAttack                   String?
+    totalDefense                  String?
     connectHistory                String?
+    createdAt                     DateTime?  @default(now())
+}
+
+model HistoryAvatar{
+    id                            Int       @id @default(autoincrement())
+    username                      String?
+    avatar                        String? @default("GiMuscleFat")
     createdAt                     DateTime?  @default(now())
 }
 
