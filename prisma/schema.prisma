@@ -69,7 +69,21 @@ model HistoryPayment{
 model HistoryAvatar{
     id                            Int       @id @default(autoincrement())
     username                      String?
-    avatar                        String? @default("GiMuscleFat")
+    avatar                        String? 
+    createdAt                     DateTime?  @default(now())
+}
+
+model HistoryTheme{
+    id                            Int       @id @default(autoincrement())
+    username                      String?
+    theme                         String?
+    createdAt                     DateTime?  @default(now())
+}
+
+model HistoryReward{
+    id                            Int       @id @default(autoincrement())
+    username                      String?
+    reward                        String? 
     createdAt                     DateTime?  @default(now())
 }
 

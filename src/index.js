@@ -480,6 +480,86 @@ app.get('/user/detail/achievement/:username', async (req, res) => {
     }
 });
 
+app.post('/buy-avatar', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const { avatar } = req.body;
+        const username = req.user
+
+        const newAvatarHistory = await prisma.historyAvatar.create({
+            data: {
+                username,
+                avatar
+            }
+        });
+
+        res.status(200).json(newAvatarHistory);
+
+    } catch (error) {
+        console.log('error', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.post('/update-avatar', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const { activeAvatar } = req.body;
+        const username = req.user
+        console.log('activeAvatar', activeAvatar)
+
+        const updatedUser = await prisma.user.update({
+            where: {
+                username: username
+            },
+            data: {
+                activeAvatar: activeAvatar
+            }
+        });
+
+        res.status(200).json(updatedUser);
+
+    } catch (error) {
+        console.log('error', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/user/detail-theme', async (req, res) => {
+    try {
+        const username = req.user
+
+        const ownedTheme = await prisma.historyTheme.findMany({
+            where: {
+                username: username
+            }
+        });
+
+        res.status(200).json(ownedTheme);
+    } catch (error) {
+        console.log('error', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.post('/buy-theme', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const { theme } = req.body;
+        const username = req.user
+
+        const newThemeHistory = await prisma.historyTheme.create({
+            data: {
+                username,
+                theme
+            }
+        });
+
+        res.status(200).json(newThemeHistory);
+
+    } catch (error) {
+        console.log('error', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
 app.post('/update-theme', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const { activeTheme, username } = req.body;
@@ -502,7 +582,6 @@ app.post('/update-theme', verifyRoles(ROLES_LIST.User), async (req, res) => {
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
-
 
 app.get('/dashboard', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
