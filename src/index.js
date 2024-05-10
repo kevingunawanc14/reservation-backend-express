@@ -87,7 +87,7 @@ app.use(express.json())
 app.use(cookieParser());
 
 app.get('/api', (req, res) => {
-    res.send('Hello World!');
+    res.send('Hello World xyz!');
 });
 
 app.post('/register', async (req, res) => {
