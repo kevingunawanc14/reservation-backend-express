@@ -10,6 +10,22 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Product{
+  id   Int      @id @default(autoincrement())
+  name String? 
+  nameDetail String?
+  gor Int?
+  price String?
+  imagePath String? 
+  priceInt Int?
+}
+
+model Challenge{
+  id   Int      @id @default(autoincrement())
+  description String 
+  repeatTime String
+}
+
 model User {
   id                            Int     @id @default(autoincrement())
   username                      String  @unique
@@ -46,7 +62,7 @@ model Schedule {
   updatedAt                     DateTime?  @updatedAt
 }
 
-model HistoryPayment{
+model HistoryPayment {
     id                            Int       @id @default(autoincrement())
     username                      String?
     idProduct                     Int?
@@ -66,7 +82,7 @@ model HistoryPayment{
     createdAt                     DateTime?  @default(now())
 }
 
-model HistoryAvatar{
+model HistoryAvatar {
     id                            Int       @id @default(autoincrement())
     username                      String?
     avatar                        String? 
@@ -80,23 +96,12 @@ model HistoryTheme{
     createdAt                     DateTime?  @default(now())
 }
 
-model HistoryReward{
+model HistoryReward {
     id                            Int       @id @default(autoincrement())
     username                      String?
     reward                        String? 
     createdAt                     DateTime?  @default(now())
 }
-
-model Product{
-  id   Int      @id @default(autoincrement())
-  name String? 
-  nameDetail String?
-  gor Int?
-  price String?
-  imagePath String? 
-  priceInt Int?
-}
-
 
 model Rating{
   id      Int      @id @default(autoincrement())
@@ -107,27 +112,4 @@ model Rating{
   idPayment Int
 }
 
-model Membership{
-  id      Int      @id @default(autoincrement())
-  type String?
 
-}
-
-model Avatar{
-  id      Int      @id @default(autoincrement())
-
-}
-
-model Challenge{
-  id   Int      @id @default(autoincrement())
-  description String 
-  repeatTime String
-}
-
-model Journal{
-  id      Int      @id @default(autoincrement())
-  healthPoint Int  
-  idUser Int
-  createdAt  DateTime   @default(now())
-
-}

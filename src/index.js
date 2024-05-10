@@ -1342,9 +1342,9 @@ const updateStatusDailyReward = async () => {
 };
 
 // Cron job to update user status to sleep every 5 minute
-// cron.schedule('*/2 * * * *', () => {
-//     updateStatusDailyReward();
-// });
+cron.schedule('*/2 * * * *', () => {
+    updateStatusDailyReward();
+});
 
 
 app.listen(PORT, () => {
