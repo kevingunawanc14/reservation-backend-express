@@ -58,7 +58,8 @@ const ROLES_LIST = {
 const allowedOrigins = [
     'https://www.yoursite.com',
     'http://localhost:5173',
-    'http://localhost:2000'
+    'http://localhost:2000',
+    'https://krakatausportcentrejombang.cloud'
 ];
 
 const corsOptions = {
@@ -245,11 +246,11 @@ app.get('/api/progressive-challange/:username', verifyRoles(ROLES_LIST.User), as
 
         let startOfYear, endOfYear;
         if (currentMonth <= 6) {
-            startOfYear = new Date(Date.UTC(today.getUTCFullYear(), 0, 1)); 
-            endOfYear = new Date(Date.UTC(today.getUTCFullYear(), 5, 30)); 
+            startOfYear = new Date(Date.UTC(today.getUTCFullYear(), 0, 1));
+            endOfYear = new Date(Date.UTC(today.getUTCFullYear(), 5, 30));
         } else {
-            startOfYear = new Date(Date.UTC(today.getUTCFullYear(), 6, 1)); 
-            endOfYear = new Date(Date.UTC(today.getUTCFullYear(), 11, 31)); 
+            startOfYear = new Date(Date.UTC(today.getUTCFullYear(), 6, 1));
+            endOfYear = new Date(Date.UTC(today.getUTCFullYear(), 11, 31));
         }
         console.log(startOfYear)
         console.log(endOfYear)
