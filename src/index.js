@@ -52,7 +52,6 @@ const verifyRoles = (...allowedRoles) => {
 
 const ROLES_LIST = {
     "Admin": 5150,
-    "Editor": 1984,
     "User": 2001
 }
 
@@ -90,23 +89,41 @@ app.get('/api', (req, res) => {
     res.send('Hello World xyz!');
 });
 
-app.post('/register', async (req, res) => {
+app.post('/api/register', async (req, res) => {
     const { username, password, phoneNumber } = req.body;
 
-    if (!username || !password) return res.status(400).json({ 'message': 'Username and password are required.' });
-    // check for duplicate usernames in the db
-    const duplicate = await prisma.user.findUnique({
-        where: {
-            username: username,
-        },
+    if (!username) {
+        return res.status(400).json({ error: 'Username is required' });
+    }
+    if (username.length < 5) {
+        return res.status(400).json({ error: 'Username must be at least 5 characters' });
+    }
+    if (!password) {
+        return res.status(400).json({ error: 'Password is required' });
+    }
+    const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/;
+    if (!passwordRegex.test(password)) {
+        return res.status(400).json({ error: 'Password not valid' });
+    }
+    if (!phoneNumber) {
+        return res.status(400).json({ error: 'Phone number is required' });
+    }
+    if (phoneNumber.length !== 12) {
+        return res.status(400).json({ error: 'Phone number must be 12 digits' });
+    }
+
+    const existingUser = await prisma.user.findUnique({
+        where: { username: username },
     });
-    if (duplicate) return res.sendStatus(409); //Conflict 
+
+    if (existingUser) {
+        return res.status(400).json({ error: 'Please use another username' });
+    }
+
     try {
-        //encrypt the password
         const hashedPwd = await bcrypt.hash(password, 10);
 
-        //store the new user
-        const newUser = await prisma.user.create({
+        await prisma.user.create({
             data: {
                 username: username,
                 password: hashedPwd,
@@ -114,7 +131,6 @@ app.post('/register', async (req, res) => {
                 roles: { "User": 2001 }
             },
         });
-        console.log("Created user: ", newUser);
         res.status(201).json({ 'success': `New user  created!` });
 
     } catch (err) {
@@ -123,10 +139,16 @@ app.post('/register', async (req, res) => {
     }
 });
 
-app.post('/login', async (req, res) => {
+app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ 'message': 'Username and password are required.' });
 
+    if (!username) {
+        return res.status(400).json({ error: 'Username is required' });
+    }
+    if (!password) {
+        return res.status(400).json({ error: 'Password is required' });
+    }
+    console.log('username', username);
     try {
         const foundUser = await prisma.user.findUnique({
             where: {
@@ -140,7 +162,6 @@ app.post('/login', async (req, res) => {
 
         if (match) {
             const roles = Object.values(foundUser.roles);
-            // create JWTs
             const token = jwt.sign
                 (
                     {
@@ -166,9 +187,7 @@ app.post('/login', async (req, res) => {
 
 app.use(authenticateToken);
 
-app.get('/search', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    // console.log('req', req);
-    // console.log('query', req);
+app.get('/api/search', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const query = req.query.q
 
     if (!query) {
@@ -183,34 +202,72 @@ app.get('/search', verifyRoles(ROLES_LIST.User), async (req, res) => {
                 }
             }
         });
-        console.log(products, 'products')
         res.json(products);
     } catch (error) {
-        console.error('Error searching courts:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
-app.get('/progressive-challange/:username', async (req, res) => {
+app.get('/api/progressive-challange/:username', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const { username } = req.params;
     try {
-        // Get all schedules for the provided username
-        const schedules = await prisma.schedule.findMany({
+
+        const today = new Date();
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        const endOfWeek = new Date(today);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+        const scheduleCountWeekly = await prisma.schedule.count({
             where: {
-                username: username
+                username: username,
+                AND: [
+                    { date: { gte: startOfWeek.toISOString() } },
+                    { date: { lte: endOfWeek.toISOString() } }
+                ]
             }
         });
 
-        // Count the number of schedules for the provided username
-        const scheduleCount = await prisma.schedule.count({
+        const startOfMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+        const endOfMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
+
+        const scheduleCountMonthly = await prisma.schedule.count({
             where: {
-                username: username
+                username: username,
+                AND: [
+                    { date: { gte: startOfMonth.toISOString() } },
+                    { date: { lte: endOfMonth.toISOString() } }
+                ]
+            }
+        });
+
+        const currentMonth = today.getMonth() + 1;
+
+        let startOfYear, endOfYear;
+        if (currentMonth <= 6) {
+            startOfYear = new Date(Date.UTC(today.getUTCFullYear(), 0, 1)); 
+            endOfYear = new Date(Date.UTC(today.getUTCFullYear(), 5, 30)); 
+        } else {
+            startOfYear = new Date(Date.UTC(today.getUTCFullYear(), 6, 1)); 
+            endOfYear = new Date(Date.UTC(today.getUTCFullYear(), 11, 31)); 
+        }
+        console.log(startOfYear)
+        console.log(endOfYear)
+
+        const scheduleCount6Month = await prisma.schedule.count({
+            where: {
+                username: username,
+                AND: [
+                    { date: { gte: startOfYear.toISOString() } },
+                    { date: { lte: endOfYear.toISOString() } }
+                ]
             }
         });
 
         res.status(200).json({
-            schedules: schedules,
-            scheduleCount: scheduleCount
+            hourWeekly: scheduleCountWeekly,
+            hourMonthly: scheduleCountMonthly,
+            hour6Month: scheduleCount6Month
         });
     } catch (error) {
         console.error('Error fetching schedule data:', error);
@@ -218,13 +275,12 @@ app.get('/progressive-challange/:username', async (req, res) => {
     }
 });
 
-app.post('/claim-reward/:username', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.post('/api/claim-reward/:username', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const username = req.params.username;
-    const { valueReward, tipe } = req.body;
-
+    const { valueReward, type } = req.body;
     try {
         let fieldToUpdate;
-        switch (tipe) {
+        switch (type) {
             case 1:
                 fieldToUpdate = 'experiencePoint';
                 break;
@@ -238,25 +294,25 @@ app.post('/claim-reward/:username', verifyRoles(ROLES_LIST.User), async (req, re
                 fieldToUpdate = 'defensePoint';
                 break;
             default:
-                return res.status(400).send('Invalid reward type');
+                return res.status(200).json({ type, valueReward });
         }
-        // Update user status to true and health
         const updatedUser = await prisma.user.update({
             where: { username },
             data: {
                 statusDailyReward: true,
-                [fieldToUpdate]: valueReward
+                [fieldToUpdate]: {
+                    increment: valueReward
+                }
             }
         });
 
-        res.status(200).json(updatedUser);
+        res.status(200).json({ ...updatedUser, type, valueReward });
     } catch (error) {
-        console.error('Error occurred:', error);
         res.status(500).send('Internal Server Error');
     }
 });
 
-app.get('/detail', async (req, res) => {
+app.get('/api/detail', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const { name } = req.query;
     console.log('name', name)
 
@@ -280,7 +336,7 @@ app.get('/detail', async (req, res) => {
     }
 });
 
-app.get('/detail/:productId', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.get('/api/detail/:productId', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const productId = parseInt(req.params.productId);
         const product = await prisma.product.findUnique({
@@ -296,7 +352,7 @@ app.get('/detail/:productId', verifyRoles(ROLES_LIST.User), async (req, res) => 
     }
 })
 
-app.get('/journal/:username', async (req, res) => {
+app.get('/api/journal/:username', verifyRoles(ROLES_LIST.User), async (req, res) => {
 
     const { username } = req.params;
 
@@ -324,7 +380,7 @@ app.get('/journal/:username', async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-app.get('/payment/:username', async (req, res) => {
+app.get('/api/payment/:username', verifyRoles(ROLES_LIST.User), async (req, res) => {
 
     const { username } = req.params;
 
@@ -351,7 +407,7 @@ app.get('/payment/:username', async (req, res) => {
     }
 });
 
-app.get('/user/detail/:username', async (req, res) => {
+app.get('/api/user/detail/:username', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const username = req.params.username;
 
@@ -372,7 +428,7 @@ app.get('/user/detail/:username', async (req, res) => {
     }
 });
 
-app.get('/user/detail/stat/:username', async (req, res) => {
+app.get('/api/user/detail/stat/:username', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const totalMinuteWorkout = await prisma.schedule.count({
             where: {
@@ -400,7 +456,7 @@ app.get('/user/detail/stat/:username', async (req, res) => {
     }
 });
 
-app.get('/user/detail/avatar/:username', async (req, res) => {
+app.get('/api/user/detail/avatar/:username', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const { username } = req.params;
 
@@ -423,7 +479,7 @@ app.get('/user/detail/avatar/:username', async (req, res) => {
     }
 });
 
-app.get('/user/detail/achievement/:username', async (req, res) => {
+app.get('/api/user/detail/achievement/:username', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const { username } = req.params;
 
     try {
@@ -484,7 +540,7 @@ app.get('/user/detail/achievement/:username', async (req, res) => {
     }
 });
 
-app.post('/buy-avatar', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.post('/api/buy-avatar', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const { avatar } = req.body;
         const username = req.user
@@ -504,7 +560,7 @@ app.post('/buy-avatar', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.post('/update-avatar', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.post('/api/update-avatar', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const { activeAvatar } = req.body;
         const username = req.user
@@ -527,7 +583,7 @@ app.post('/update-avatar', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.get('/user/detail-theme', async (req, res) => {
+app.get('/api/user/detail-theme', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const username = req.user
 
@@ -544,7 +600,7 @@ app.get('/user/detail-theme', async (req, res) => {
     }
 });
 
-app.post('/buy-theme', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.post('/api/buy-theme', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const { theme } = req.body;
         const username = req.user
@@ -564,7 +620,7 @@ app.post('/buy-theme', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.post('/update-theme', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.post('/api/update-theme', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const { activeTheme, username } = req.body;
         console.log('activeTheme', activeTheme)
@@ -587,7 +643,7 @@ app.post('/update-theme', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.get('/dashboard', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.get('/api/dashboard', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
 
 
@@ -610,7 +666,7 @@ app.get('/dashboard', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.get('/dashboard/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.get('/api/dashboard/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const userId = parseInt(req.params.id);
         console.log('userId', userId)
@@ -632,7 +688,7 @@ app.get('/dashboard/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.post('/dashboard/add', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.post('/api/dashboard/add', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const { username, password } = req.body;
 
     try {
@@ -650,7 +706,7 @@ app.post('/dashboard/add', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.post('/dashboard/:id/update', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.post('/api/dashboard/:id/update', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const productId = parseInt(req.params.id);
     const { name, gor, price } = req.body; // Assuming these are the fields you want to update
 
@@ -679,7 +735,7 @@ app.post('/dashboard/:id/update', verifyRoles(ROLES_LIST.User), async (req, res)
     }
 });
 
-app.delete('/dashboard/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.delete('/api//dashboard/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const productId = parseInt(req.params.id);
     console.log('productId', productId)
     try {
@@ -701,7 +757,7 @@ app.delete('/dashboard/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.get('/order', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.get('/api/order', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         // const order = await prisma.schedule.findMany();
         const order = await prisma.$queryRaw`
@@ -717,7 +773,7 @@ app.get('/order', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.get('/order/reserved', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.get('/api/order/reserved', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const order = await prisma.schedule.findMany();
         res.json(order);
@@ -727,7 +783,7 @@ app.get('/order/reserved', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.get('/order/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.get('/api/order/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
 
     try {
         const orderId = parseInt(req.params.id);
@@ -749,7 +805,7 @@ app.get('/order/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.get('/order/detail/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.get('/api/order/detail/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const connectHistory = req.params.id;
         console.log(connectHistory);
@@ -768,7 +824,7 @@ app.get('/order/detail/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.post('/order/add', async (req, res) => {
+app.post('/api/order/add', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const { paymentMethod, paymentStatus } = req.body;
 
     try {
@@ -786,7 +842,7 @@ app.post('/order/add', async (req, res) => {
     }
 });
 
-app.post('/order/:id/update', async (req, res) => {
+app.post('/api/order/:id/update', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const orderId = parseInt(req.params.id);
     const { paymentMethod, paymentStatus } = req.body; // Assuming these are the fields you want to update
 
@@ -814,7 +870,7 @@ app.post('/order/:id/update', async (req, res) => {
     }
 });
 
-app.delete('/order/:id', async (req, res) => {
+app.delete('/api/order/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const orderId = parseInt(req.params.id);
     try {
         const existingOrder = await prisma.historyPayment.findUnique({
@@ -835,7 +891,7 @@ app.delete('/order/:id', async (req, res) => {
     }
 });
 
-app.post('/order', async (req, res) => {
+app.post('/api/order', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const { idProduct, username, price, hour, paymentStatus, paymentMethod, totalPrice, date, detailDate, connectHistory } = req.body;
         if (!hour) {
@@ -926,7 +982,7 @@ app.post('/order', async (req, res) => {
     }
 });
 
-app.get('/ratings/:idProduct', async (req, res) => {
+app.get('/api/ratings/:idProduct', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const { idProduct } = req.params;
     try {
         const ratings = await prisma.rating.findMany({
@@ -942,7 +998,7 @@ app.get('/ratings/:idProduct', async (req, res) => {
 });
 
 
-app.post('/rating', async (req, res) => {
+app.post('/api/rating', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const { idProduct, username, rating, description, idPayment } = req.body;
 
@@ -964,7 +1020,7 @@ app.post('/rating', async (req, res) => {
     }
 });
 
-app.get('/rating/:username/:idPayment', async (req, res) => {
+app.get('/api/rating/:username/:idPayment', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const { username, idPayment } = req.params;
 
@@ -993,7 +1049,7 @@ app.get('/rating/:username/:idPayment', async (req, res) => {
     }
 });
 
-app.get('/user', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.get('/api/user', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const user = await prisma.user.findMany();
         res.json(user);
@@ -1003,7 +1059,7 @@ app.get('/user', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.get('/user/ranked', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.get('/api/user/ranked', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const users = await prisma.user.findMany({
             orderBy: {
@@ -1025,7 +1081,7 @@ app.get('/user/ranked', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.get('/user/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.get('/api//user/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const userId = parseInt(req.params.id);
         const user = await prisma.user.findUnique({
@@ -1044,7 +1100,7 @@ app.get('/user/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.post('/user/add', async (req, res) => {
+app.post('/api/user/add', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const { username, password, phoneNumber } = req.body;
     console.log(req.body)
     try {
@@ -1063,7 +1119,7 @@ app.post('/user/add', async (req, res) => {
     }
 });
 
-app.post('/user/:id/update', async (req, res) => {
+app.post('/api/user/:id/update', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const userId = parseInt(req.params.id);
     const { username, password, phoneNumber } = req.body;
     console.log(req.body);
@@ -1092,7 +1148,7 @@ app.post('/user/:id/update', async (req, res) => {
     }
 });
 
-app.delete('/user/:id', async (req, res) => {
+app.delete('/api/user/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const userId = parseInt(req.params.id);
     try {
         const existingUser = await prisma.user.findUnique({
@@ -1113,7 +1169,7 @@ app.delete('/user/:id', async (req, res) => {
     }
 });
 
-app.get('/product', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.get('/api/product', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const product = await prisma.product.findMany();
         console.log(product);
@@ -1123,7 +1179,7 @@ app.get('/product', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.get('/product/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.get('/api/product/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const productId = parseInt(req.params.id);
         console.log('productId', productId)
@@ -1145,7 +1201,7 @@ app.get('/product/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.post('/product/add', async (req, res) => {
+app.post('/api/product/add', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const { name, gor, price } = req.body;
 
     try {
@@ -1164,7 +1220,7 @@ app.post('/product/add', async (req, res) => {
     }
 });
 
-app.post('/product/:id/update', async (req, res) => {
+app.post('/api/product/:id/update', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const productId = parseInt(req.params.id);
     const { name, gor, price } = req.body; // Assuming these are the fields you want to update
     console.log(req.body)
@@ -1193,7 +1249,7 @@ app.post('/product/:id/update', async (req, res) => {
     }
 });
 
-app.delete('/product/:id', async (req, res) => {
+app.delete('/api//product/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const productId = parseInt(req.params.id);
     console.log('productId', productId)
     try {
@@ -1215,10 +1271,9 @@ app.delete('/product/:id', async (req, res) => {
     }
 });
 
-app.get('/challenge', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.get('/api/challenge', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const challange = await prisma.challenge.findMany();
-        console.log(challange);
         res.json(challange);
     } catch (error) {
         console.log('error', error)
@@ -1226,7 +1281,7 @@ app.get('/challenge', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.get('/challenge/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.get('/api/challenge/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const challengeId = parseInt(req.params.id);
         console.log('challengeId', challengeId)
@@ -1248,7 +1303,7 @@ app.get('/challenge/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.post('/challenge/add', async (req, res) => {
+app.post('/api/challenge/add', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const { description, repeatTime } = req.body;
 
     try {
@@ -1266,7 +1321,7 @@ app.post('/challenge/add', async (req, res) => {
     }
 });
 
-app.post('/challenge/:id/update', async (req, res) => {
+app.post('/api/challenge/:id/update', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const challengeId = parseInt(req.params.id);
     const { description, repeatTime } = req.body; // Assuming these are the fields you want to update
 
@@ -1293,7 +1348,7 @@ app.post('/challenge/:id/update', async (req, res) => {
     }
 });
 
-app.delete('/challenge/:id', async (req, res) => {
+app.delete('/api/challenge/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const challangeId = parseInt(req.params.id);
     console.log('challangeId', challangeId)
     try {
@@ -1315,7 +1370,7 @@ app.delete('/challenge/:id', async (req, res) => {
     }
 });
 
-app.get('/journals', async (req, res) => {
+app.get('/api/journals', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const journals = await prisma.journal.findMany();
         res.json(journals);
@@ -1341,11 +1396,12 @@ const updateStatusDailyReward = async () => {
 
 };
 
-// Cron job to update user status to sleep every 5 minute
-cron.schedule('*/2 * * * *', () => {
+cron.schedule('*/1 * * * *', () => {
     updateStatusDailyReward();
 });
 
+// 0 */2 * * * --> every two hours
+// 0 7 * * * --> every day at 7 morning
 
 app.listen(PORT, () => {
     console.log("Express API running in port: " + PORT);
