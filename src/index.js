@@ -25,7 +25,7 @@ const authenticateToken = (req, res, next) => {
 
     jwt.verify(
         token,
-        process.env.TOKEN_SECRET,
+        process.env.TOKEN_SECRET || '501a3eb5937c1195b380eed1657d147acebf0e2a8403c519dd0ec809186e04fe5716f52b1773b3292561a2fb7792fbfdd56b2b6957af16aca530f754bfe437db',
         (err, decoded) => {
             if (err) return res.sendStatus(403); //invalid token
             req.user = decoded.UserInfo.username;
@@ -171,7 +171,7 @@ app.post('/api/login', async (req, res) => {
                             "roles": roles
                         }
                     },
-                    process.env.TOKEN_SECRET,
+                    process.env.TOKEN_SECRET |'501a3eb5937c1195b380eed1657d147acebf0e2a8403c519dd0ec809186e04fe5716f52b1773b3292561a2fb7792fbfdd56b2b6957af16aca530f754bfe437db',
                     { expiresIn: '1d' }
                 );
 
