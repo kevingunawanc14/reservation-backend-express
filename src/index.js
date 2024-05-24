@@ -142,9 +142,9 @@ app.post('/api/register', async (req, res) => {
 
         res.status(201).json({ 'success': `New user  created!` });
 
-    } catch (err) {
+    } catch (error) {
         console.log('error', error)
-        res.status(500).json({ 'message': err.message });
+        res.status(500).json({ 'message': error.message });
     }
 });
 
@@ -187,9 +187,9 @@ app.post('/api/login', async (req, res) => {
             res.sendStatus(401);
         }
 
-    } catch (err) {
+    } catch (error) {
         console.log('error', error)
-        res.status(500).json({ 'message': err.message });
+        res.status(500).json({ 'message': error.message });
     }
 });
 
