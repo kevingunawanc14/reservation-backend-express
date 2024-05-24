@@ -27,39 +27,34 @@ model Challenge{
 }
 
 model User {
-  id                            Int     @id @default(autoincrement())
-  username                      String  @unique
-  password                      String 
-  phoneNumber                   String
-  email                         String? @default("abc@gmail.com")  
-  roles                         Json?
-  healthPoint                   Int? @default(100)
-  experiencePoint               Int? @default(100)
-  attackPoint                   Int? @default(0)
-  defensePoint                  Int? @default(0)
-  rank                          String? @default("Gold")
-  activeTheme                   String? @default("Light")
-  activeAvatar                  String? @default("GiMuscleFat")
-  krakatauCoin                  Int? @default(0)
-  statusWeeklyChallange         Boolean? @default(false)
-  statusMonthlyChallange        Boolean? @default(false)
-  status6MonthChallange         Boolean? @default(false)
-  statusDailyReward             Boolean? @default(false)
-  biayaPendaftaran              Boolean? @default(false)
+  id                                  Int     @id @default(autoincrement())
+  username                            String  @unique
+  password                            String 
+  phoneNumber                         String
+  roles                               Json?
+  healthPoint                         Int? @default(100)
+  experiencePoint                     Int? @default(100)
+  attackPoint                         Int? @default(0)
+  defensePoint                        Int? @default(0)
+  activeTheme                         String? @default("Light")
+  activeAvatar                        String? @default("GiMuscleFat")
+  krakatauCoin                        Int? @default(0)
+  statusWeeklyChallange               Boolean? @default(false)
+  statusMonthlyChallange              Boolean? @default(false)
+  status6MonthChallange               Boolean? @default(false)
+  statusDailyReward                   Boolean? @default(false)
+  biayaPendaftaranMembershipGym       Boolean? @default(false)
+  biayaPendaftaranMembershipBadminton Boolean? @default(false)
 }
 
 model Schedule {
   id                            Int       @id @default(autoincrement())
   idProduct                     Int?
   username                      String?
-  price                         String?
   hour                          String?
   date                          String?
-  paymentStatus                 String?
-  paymentMethod                 String?
   connectHistory                String?
-  createdAt                     DateTime?  @default(now())
-  updatedAt                     DateTime?  @updatedAt
+  cancelId                      String?
 }
 
 model HistoryPayment {
@@ -67,11 +62,11 @@ model HistoryPayment {
     username                      String?
     idProduct                     Int?
     date                          String?
+    detailDate                    String?
     totalPrice                    String?
     paymentMethod                 String?
     paymentStatus                 String?
-    detailDate                    String?
-    detailOrder                   String?
+    paymentProveImagePath         String?
     typeBreath                    String?
     minuteBreath                  String?
     totalXp                       String?
@@ -79,7 +74,7 @@ model HistoryPayment {
     totalAttack                   String?
     totalDefense                  String?
     connectHistory                String?
-    createdAt                     DateTime?  @default(now())
+    cancelId                      String?
 }
 
 model HistoryAvatar {
@@ -93,13 +88,6 @@ model HistoryTheme{
     id                            Int       @id @default(autoincrement())
     username                      String?
     theme                         String?
-    createdAt                     DateTime?  @default(now())
-}
-
-model HistoryReward {
-    id                            Int       @id @default(autoincrement())
-    username                      String?
-    reward                        String? 
     createdAt                     DateTime?  @default(now())
 }
 

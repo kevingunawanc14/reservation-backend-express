@@ -7,33 +7,31 @@ dotenv.config();
 
 const prisma = new PrismaClient();
 const app = express();
-const PORT = process.env.PORT || 2000;
+const PORT = 2000;
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const bcrypt = require('bcrypt');
 const cron = require('node-cron');
-const { use } = require("bcrypt/promises");
+const multer = require('multer');
+const path = require('path');
 
 
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization']
 
     const token = authHeader && authHeader.split(' ')[1]
-    console.log('token', token);
-
     if (token == null) return res.sendStatus(401)
 
     jwt.verify(
         token,
         '501a3eb5937c1195b380eed1657d147acebf0e2a8403c519dd0ec809186e04fe5716f52b1773b3292561a2fb7792fbfdd56b2b6957af16aca530f754bfe437db',
         (err, decoded) => {
-            if (err) return res.sendStatus(403); //invalid token
+            if (err) return res.sendStatus(403);
             req.user = decoded.UserInfo.username;
             req.roles = decoded.UserInfo.roles;
             next();
         }
     );
-
 
 }
 
@@ -41,13 +39,10 @@ const verifyRoles = (...allowedRoles) => {
     return (req, res, next) => {
         if (!req?.roles) return res.sendStatus(401);
         const rolesArray = [...allowedRoles];
-        console.log('roles yang haru dimiliki:', rolesArray)
-        console.log('roles punya anda:', req.roles)
         const result = req.roles.map(role => rolesArray.includes(role)).find(val => val === true);
         if (!result) return res.sendStatus(401);
         next();
     }
-
 }
 
 const ROLES_LIST = {
@@ -56,9 +51,7 @@ const ROLES_LIST = {
 }
 
 const allowedOrigins = [
-    'https://www.yoursite.com',
     'http://localhost:5173',
-    'http://localhost:2000',
     'https://krakatausportcentrejombang.cloud'
 ];
 
@@ -87,7 +80,7 @@ app.use(express.json())
 app.use(cookieParser());
 
 app.get('/api', (req, res) => {
-    res.send('Hello World xyz!');
+    res.send('Hello World');
 });
 
 app.post('/api/register', async (req, res) => {
@@ -132,10 +125,25 @@ app.post('/api/register', async (req, res) => {
                 roles: { "User": 2001 }
             },
         });
+
+        await prisma.historyAvatar.create({
+            data: {
+                username: username,
+                avatar: 'GiMuscleFat',
+            },
+        });
+
+        await prisma.historyTheme.create({
+            data: {
+                username: username,
+                theme: 'Light',
+            },
+        });
+
         res.status(201).json({ 'success': `New user  created!` });
 
     } catch (err) {
-        console.log(err);
+        console.log('error', error)
         res.status(500).json({ 'message': err.message });
     }
 });
@@ -149,7 +157,6 @@ app.post('/api/login', async (req, res) => {
     if (!password) {
         return res.status(400).json({ error: 'Password is required' });
     }
-    console.log('username', username);
     try {
         const foundUser = await prisma.user.findUnique({
             where: {
@@ -181,10 +188,12 @@ app.post('/api/login', async (req, res) => {
         }
 
     } catch (err) {
-        console.log('err', err)
+        console.log('error', error)
         res.status(500).json({ 'message': err.message });
     }
 });
+
+app.use('/Images', express.static(path.join(__dirname, '..', 'images')));
 
 app.use(authenticateToken);
 
@@ -205,6 +214,7 @@ app.get('/api/search', verifyRoles(ROLES_LIST.User), async (req, res) => {
         });
         res.json(products);
     } catch (error) {
+        console.log('error', error)
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
@@ -212,8 +222,8 @@ app.get('/api/search', verifyRoles(ROLES_LIST.User), async (req, res) => {
 app.get('/api/progressive-challange/:username', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const { username } = req.params;
     try {
-
         const today = new Date();
+
         const startOfWeek = new Date(today);
         startOfWeek.setDate(today.getDate() - today.getDay());
         const endOfWeek = new Date(today);
@@ -228,6 +238,7 @@ app.get('/api/progressive-challange/:username', verifyRoles(ROLES_LIST.User), as
                 ]
             }
         });
+
 
         const startOfMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
         const endOfMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
@@ -252,8 +263,6 @@ app.get('/api/progressive-challange/:username', verifyRoles(ROLES_LIST.User), as
             startOfYear = new Date(Date.UTC(today.getUTCFullYear(), 6, 1));
             endOfYear = new Date(Date.UTC(today.getUTCFullYear(), 11, 31));
         }
-        console.log(startOfYear)
-        console.log(endOfYear)
 
         const scheduleCount6Month = await prisma.schedule.count({
             where: {
@@ -271,7 +280,7 @@ app.get('/api/progressive-challange/:username', verifyRoles(ROLES_LIST.User), as
             hour6Month: scheduleCount6Month
         });
     } catch (error) {
-        console.error('Error fetching schedule data:', error);
+        console.log('error', error)
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -279,6 +288,7 @@ app.get('/api/progressive-challange/:username', verifyRoles(ROLES_LIST.User), as
 app.post('/api/claim-reward/:username', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const username = req.params.username;
     const { valueReward, type } = req.body;
+    // console.log('req.body', req.body)
     try {
         let fieldToUpdate;
         switch (type) {
@@ -295,12 +305,21 @@ app.post('/api/claim-reward/:username', verifyRoles(ROLES_LIST.User), async (req
                 fieldToUpdate = 'defensePoint';
                 break;
             default:
-                return res.status(200).json({ type, valueReward });
+                const updatedUser = await prisma.user.update({
+                    where: { username },
+                    data: {
+                        statusDailyReward: true,
+                    }
+                });
+                return res.status(200).json({ type, valueReward, updatedUser });
         }
         const updatedUser = await prisma.user.update({
             where: { username },
             data: {
-                statusDailyReward: true,
+                statusDailyReward: valueReward <= 3 ? true : undefined,
+                statusWeeklyChallange: valueReward === 10 ? true : undefined,
+                statusMonthlyChallange: valueReward === 100 ? true : undefined,
+                status6MonthChallange: valueReward === 1000 ? true : undefined,
                 [fieldToUpdate]: {
                     increment: valueReward
                 }
@@ -309,30 +328,16 @@ app.post('/api/claim-reward/:username', verifyRoles(ROLES_LIST.User), async (req
 
         res.status(200).json({ ...updatedUser, type, valueReward });
     } catch (error) {
+        console.log('error', error)
         res.status(500).send('Internal Server Error');
     }
 });
 
-app.get('/api/detail', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    const { name } = req.query;
-    console.log('name', name)
-
-    // Check if name is empty
-    if (!name) {
-        return res.json([]); // Return empty array
-    }
+app.get('/api/product', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
-        const courts = await prisma.court.findMany({
-            where: {
-                name: {
-                    contains: name,
-                }
-            }
-        });
-        console.log(courts, 'courts')
-        res.json(courts);
+        const product = await prisma.product.findMany();
+        res.json(product);
     } catch (error) {
-        console.error('Error searching courts:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
@@ -348,7 +353,7 @@ app.get('/api/detail/:productId', verifyRoles(ROLES_LIST.User), async (req, res)
 
         res.json(product);
     } catch (error) {
-        console.log(error);
+        console.log('error', error)
         res.status(500).json({ error: 'Internal Server Error' });
     }
 })
@@ -370,17 +375,19 @@ app.get('/api/journal/:username', verifyRoles(ROLES_LIST.User), async (req, res)
             hp.username = ${username}
             AND 
             hp.idProduct NOT IN (16, 17, 18, 19, 20, 21)
+            AND
+            hp.paymentStatus = 'Lunas'
         ORDER BY
             hp.id DESC;
         `;
-        // Send response with the retrieved payments
+
         res.json(payments);
     } catch (error) {
-        // Handle errors
-        console.error('Error fetching payments:', error);
+        console.log('error', error)
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+
 app.get('/api/payment/:username', verifyRoles(ROLES_LIST.User), async (req, res) => {
 
     const { username } = req.params;
@@ -389,7 +396,8 @@ app.get('/api/payment/:username', verifyRoles(ROLES_LIST.User), async (req, res)
         const payments = await prisma.$queryRaw`
         SELECT
             hp.*,
-            p.name AS productName
+            p.name AS productName,
+            p.nameDetail as fullProductName
         FROM
             HistoryPayment hp
         LEFT JOIN
@@ -399,11 +407,54 @@ app.get('/api/payment/:username', verifyRoles(ROLES_LIST.User), async (req, res)
         ORDER BY
             hp.id DESC;
         `;
-        // Send response with the retrieved payments
+
         res.json(payments);
     } catch (error) {
-        // Handle errors
-        console.error('Error fetching payments:', error);
+        console.log('error', error)
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.post('/api/attack/:username', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    const { username } = req.params;
+    const userLogin = req.user
+
+    // console.log(username)
+    try {
+        const user = await prisma.user.findUnique({ where: { username: username } });
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        let updatedUser;
+        if (user.defensePoint > 0) {
+            updatedUser = await prisma.user.update({
+                where: { username: username },
+                data: { defensePoint: user.defensePoint - 1 },
+            });
+        } else {
+            updatedUser = await prisma.user.update({
+                where: { username: username },
+                data: { healthPoint: user.healthPoint - 1 },
+            });
+        }
+
+        updatedUserLogin = await prisma.user.update({
+            where: { username: userLogin },
+            data: {
+                attackPoint: {
+                    decrement: 1
+                }
+            },
+        });
+
+        res.json({
+            updatedUser,
+            updatedUserLogin,
+        });
+    } catch (error) {
+        console.log('error', error)
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -461,7 +512,6 @@ app.get('/api/user/detail/avatar/:username', verifyRoles(ROLES_LIST.User), async
     try {
         const { username } = req.params;
 
-        // Query the database to find all avatars for the user based on the provided username
         const userAvatars = await prisma.historyAvatar.findMany({
             where: {
                 username: username
@@ -472,8 +522,28 @@ app.get('/api/user/detail/avatar/:username', verifyRoles(ROLES_LIST.User), async
             return res.status(404).json({ error: 'User not found' });
         }
 
-        // Send the user's avatar data as a response
         res.status(200).json(userAvatars);
+    } catch (error) {
+        console.log('error', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/api/user/detail/theme/:username', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const { username } = req.params;
+
+        const userTheme = await prisma.historyTheme.findMany({
+            where: {
+                username: username
+            }
+        });
+
+        if (userTheme.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.status(200).json(userTheme);
     } catch (error) {
         console.log('error', error);
         res.status(500).json({ error: 'Internal Server Error' });
@@ -543,14 +613,23 @@ app.get('/api/user/detail/achievement/:username', verifyRoles(ROLES_LIST.User), 
 
 app.post('/api/buy-avatar', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
-        const { avatar } = req.body;
         const username = req.user
+        const { avatar, price } = req.body;
 
         const newAvatarHistory = await prisma.historyAvatar.create({
             data: {
                 username,
                 avatar
             }
+        });
+
+        const user = await prisma.user.update({
+            where: { username: username },
+            data: {
+                experiencePoint: {
+                    decrement: price,
+                },
+            },
         });
 
         res.status(200).json(newAvatarHistory);
@@ -565,7 +644,7 @@ app.post('/api/update-avatar', verifyRoles(ROLES_LIST.User), async (req, res) =>
     try {
         const { activeAvatar } = req.body;
         const username = req.user
-        console.log('activeAvatar', activeAvatar)
+        // console.log('activeAvatar', activeAvatar)
 
         const updatedUser = await prisma.user.update({
             where: {
@@ -603,14 +682,23 @@ app.get('/api/user/detail-theme', verifyRoles(ROLES_LIST.User), async (req, res)
 
 app.post('/api/buy-theme', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
-        const { theme } = req.body;
         const username = req.user
+        const { theme, price } = req.body;
 
         const newThemeHistory = await prisma.historyTheme.create({
             data: {
                 username,
                 theme
             }
+        });
+
+        const user = await prisma.user.update({
+            where: { username: username },
+            data: {
+                experiencePoint: {
+                    decrement: price,
+                },
+            },
         });
 
         res.status(200).json(newThemeHistory);
@@ -624,8 +712,8 @@ app.post('/api/buy-theme', verifyRoles(ROLES_LIST.User), async (req, res) => {
 app.post('/api/update-theme', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const { activeTheme, username } = req.body;
-        console.log('activeTheme', activeTheme)
-        console.log('username', username)
+        // console.log('activeTheme', activeTheme)
+        // console.log('username', username)
 
         const updatedUser = await prisma.user.update({
             where: {
@@ -644,164 +732,12 @@ app.post('/api/update-theme', verifyRoles(ROLES_LIST.User), async (req, res) => 
     }
 });
 
-app.get('/api/dashboard', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    try {
-
-
-        const totalReservations = null;
-        const totalRevenue = null
-        const totalProductsBySport = null
-        const totalOrdersLast10Months = null
-        const totalIncomeLast10Months = null
-
-        res.json({
-            totalReservations,
-            totalRevenue,
-            totalProductsBySport,
-            totalOrdersLast10Months,
-            totalIncomeLast10Months
-        });
-    } catch (error) {
-        console.log('error', error)
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.get('/api/dashboard/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    try {
-        const userId = parseInt(req.params.id);
-        console.log('userId', userId)
-        const user = await prisma.user.findUnique({
-            where: {
-                id: productId
-            }
-        });
-
-        console.log('user', user)
-
-        if (!user) {
-            return res.status(404).json({ error: 'Product not found' });
-        }
-
-        res.json(user);
-    } catch (error) {
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.post('/api/dashboard/add', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    const { username, password } = req.body;
-
-    try {
-        const newUser = await prisma.user.create({
-            data: {
-                username,
-                password
-            }
-        });
-
-        res.status(201).json({ message: 'User added successfully', product: newUser });
-    } catch (error) {
-        console.error('Error adding user:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.post('/api/dashboard/:id/update', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    const productId = parseInt(req.params.id);
-    const { name, gor, price } = req.body; // Assuming these are the fields you want to update
-
-    try {
-        const existingProduct = await prisma.product.findUnique({
-            where: { id: productId }
-        });
-
-        if (!existingProduct) {
-            return res.status(404).json({ error: 'Product not found' });
-        }
-
-        const updateProduct = await prisma.product.update({
-            where: { id: productId },
-            data: {
-                name: name || existingProduct.name,
-                gor: gor || existingProduct.gor,
-                price: price || existingProduct.price,
-            }
-        });
-
-        res.json({ message: 'Product updated successfully', product: updateProduct });
-    } catch (error) {
-        console.log('error', error)
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.delete('/api//dashboard/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    const productId = parseInt(req.params.id);
-    console.log('productId', productId)
-    try {
-        const existingProduct = await prisma.product.findUnique({
-            where: { id: productId }
-        });
-
-        if (!existingProduct) {
-            return res.status(404).json({ error: 'Product not found' });
-        }
-
-        await prisma.product.delete({
-            where: { id: productId }
-        });
-
-        res.json({ message: 'Product deleted successfully' });
-    } catch (error) {
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.get('/api/order', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    try {
-        // const order = await prisma.schedule.findMany();
-        const order = await prisma.$queryRaw`
-            SELECT p.nameDetail AS productName, hp.*
-            FROM Product p
-            INNER JOIN HistoryPayment hp ON p.id = hp.idProduct
-            ORDER BY hp.id DESC;
-        `;
-        res.json(order);
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
 app.get('/api/order/reserved', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const order = await prisma.schedule.findMany();
         res.json(order);
     } catch (error) {
-        console.log(error);
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.get('/api/order/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
-
-    try {
-        const orderId = parseInt(req.params.id);
-        const order = await prisma.$queryRaw`
-            SELECT p.name AS productName, hp.*
-            FROM Product p
-            INNER JOIN HistoryPayment hp ON p.id = hp.idProduct
-            WHERE hp.id = ${orderId}
-            ORDER BY hp.id DESC;
-        `;
-        if (!order) {
-            return res.status(404).json({ error: 'Product not found' });
-        }
-
-        res.json(order);
-    } catch (error) {
-        console.log(error);
+        console.log('error', error)
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
@@ -809,114 +745,119 @@ app.get('/api/order/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
 app.get('/api/order/detail/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const connectHistory = req.params.id;
-        console.log(connectHistory);
         const detailOrder = await prisma.$queryRaw`
-            SELECT * FROM schedule
+            SELECT * FROM Schedule
             WHERE connectHistory = ${connectHistory};
         `;
-        if (!detailOrder) {
-            return res.status(404).json({ error: 'Product not found' });
+        console.log('detailOrder', detailOrder)
+        console.log('detailOrder.length', detailOrder.length)
+
+        if (detailOrder.length == 0) {
+            return res.status(404).json({ status: 'fail', message: `Please refresh the page reservation already canceled` });
+
         }
-        console.log('detailOrder', detailOrder);
+        // console.log('detailOrder', detailOrder);
         res.json(detailOrder);
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.post('/api/order/add', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    const { paymentMethod, paymentStatus } = req.body;
-
-    try {
-        const newOrder = await prisma.order.create({
-            data: {
-                paymentStatus,
-                paymentMethod,
-            }
-        });
-
-        res.status(201).json({ message: 'Order added successfully', order: newOrder });
-    } catch (error) {
-        console.error('Error adding order:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.post('/api/order/:id/update', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    const orderId = parseInt(req.params.id);
-    const { paymentMethod, paymentStatus } = req.body; // Assuming these are the fields you want to update
-
-    try {
-        const existingOrder = await prisma.historyPayment.findUnique({
-            where: { id: orderId }
-        });
-
-        if (!existingOrder) {
-            return res.status(404).json({ error: 'Order not found' });
-        }
-
-        const updateOrder = await prisma.historyPayment.update({
-            where: { id: orderId },
-            data: {
-                paymentStatus,
-                paymentMethod,
-            }
-        });
-
-        res.json({ message: 'Order updated successfully', order: updateOrder });
     } catch (error) {
         console.log('error', error)
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
-app.delete('/api/order/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    const orderId = parseInt(req.params.id);
-    try {
-        const existingOrder = await prisma.historyPayment.findUnique({
-            where: { id: orderId }
-        });
 
-        if (!existingOrder) {
-            return res.status(404).json({ error: 'Order not found' });
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'Images')
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname))
+    }
+})
+
+const upload = multer({ storage: storage })
+
+app.post('/api/order', verifyRoles(ROLES_LIST.User), upload.single('filePaymentProve'), async (req, res) => {
+    // console.log('Uploaded file:', req.file);
+    // console.log('req:', req);
+    // console.log('req.file.filename:', req.file.filename);
+    // console.log('check2')
+
+    // console.log('req:', req);
+    // console.log('res:', res);
+    // const imageUrl = `/bukti_pembayaran_qris/${req.file.filename}`;
+
+    // Access the uploaded file details (filename, path, etc.) from req.file
+    // res.json({ message: 'File uploaded successfully!' });
+    try {
+        const {
+            idProduct,
+            username,
+            hour,
+            paymentStatus,
+            paymentMethod,
+            totalPrice,
+            date,
+            detailDate,
+            typeBreath,
+            minuteBreath,
+            totalXp,
+            totalHp,
+            totalAttack,
+            totalDefense,
+            connectHistory,
+            cancelId,
+        } = req.body;
+
+        const hourArray = hour.split(',');
+
+
+        // console.log('typeBreath', typeBreath)
+        // console.log('minuteBreath', minuteBreath)
+        // console.log('totalXp', totalXp)
+        // console.log('totalHp', totalHp)
+        // console.log('totalAttack', totalAttack)
+        // console.log('totalDefense', totalDefense)
+        // console.log('totalPrice', totalPrice)
+        // console.log('paymentMethod', paymentMethod)
+        console.log('hourArray', hourArray)
+        console.log('date', date)
+
+        console.log('req.body', req.body);
+
+        // Check if any hour in the array is already booked
+        for (const hour of hourArray) {
+            const existingSchedule = await prisma.schedule.findFirst({
+                where: {
+                    hour,
+                    date,
+                    idProduct: parseInt(idProduct)
+                },
+            });
+
+            if (existingSchedule) {
+                return res.status(400).json({ status: 'fail', message: `Please refresh the page date and hour ${hour} already ordered` });
+            }
         }
 
-        await prisma.historyPayment.delete({
-            where: { id: orderId }
-        });
-
-        res.json({ message: 'Order deleted successfully' });
-    } catch (error) {
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.post('/api/order', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    try {
-        const { idProduct, username, price, hour, paymentStatus, paymentMethod, totalPrice, date, detailDate, connectHistory } = req.body;
-        if (!hour) {
+        if (hour == 'null') {
             const result = await prisma.schedule.create({
                 data: {
                     idProduct: parseInt(idProduct),
                     username,
                     date,
                     hour: null,
-                    paymentStatus,
-                    paymentMethod,
-                    connectHistory
+                    connectHistory,
+                    cancelId
                 }
             });
         } else {
-            console.log('idProduct', idProduct)
-            const sortedHours = hour.sort((a, b) => {
+
+            const sortedHours = hourArray.sort((a, b) => {
                 const [aStart] = a.split('-');
                 const [bStart] = b.split('-');
                 return parseFloat(aStart) - parseFloat(bStart);
             });
-            console.log('sortedHours', sortedHours);
 
-            // Define mappings for each idProduct
             const idProductMappings = {
                 1: [2, 3, 4, 5, 6, 7, 1],
                 2: [1, 3, 4, 5, 6, 7, 2],
@@ -938,20 +879,14 @@ app.post('/api/order', verifyRoles(ROLES_LIST.User), async (req, res) => {
             for (const h of sortedHours) {
                 const idsToInsert = idProductMappings[idProduct];
                 for (const productId of idsToInsert) {
-                    // console.log('productId', typeof productId)
-                    // console.log('idProduct', typeof idProduct)
-                    // if (idProduct === productId) {
-                    //     console.log('sama');
-                    // }
-                    const newSchedule = await prisma.schedule.create({
+                    await prisma.schedule.create({
                         data: {
                             idProduct: parseInt(productId),
                             username: productId === parseInt(idProduct) ? username : undefined,
                             hour: h,
                             date,
-                            paymentStatus,
-                            paymentMethod,
-                            connectHistory: productId === parseInt(idProduct) ? connectHistory : null
+                            connectHistory: productId === parseInt(idProduct) ? connectHistory : null,
+                            cancelId
                         }
                     });
                 }
@@ -969,16 +904,22 @@ app.post('/api/order', verifyRoles(ROLES_LIST.User), async (req, res) => {
                 paymentStatus,
                 detailDate,
                 connectHistory,
+                typeBreath,
+                minuteBreath: minuteBreath.toString(),
+                totalXp: totalXp.toString(),
+                totalHp: totalHp.toString(),
+                totalAttack: totalAttack.toString(),
+                totalDefense: totalDefense.toString(),
                 totalPrice: String(totalPrice),
-                detailOrder: JSON.stringify(req.body),
+                paymentProveImagePath: paymentMethod === 'qris' ? req.file.filename : undefined,
+                cancelId
             },
         });
 
-        console.log('historyPayment', historyPayment);
         res.status(201).json({ message: 'Order added successfully', order: historyPayment });
 
     } catch (error) {
-        console.error('Error inserting data:', error);
+        console.log('error', error)
         res.status(500).json({ error: 'Error inserting data' });
     }
 });
@@ -986,18 +927,44 @@ app.post('/api/order', verifyRoles(ROLES_LIST.User), async (req, res) => {
 app.get('/api/ratings/:idProduct', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const { idProduct } = req.params;
     try {
-        const ratings = await prisma.rating.findMany({
-            where: {
-                idProduct: parseInt(idProduct) // Convert idProduct to integer
-            }
+        const ratings = await prisma.$queryRaw`
+            SELECT r.*, u.username, u.activeAvatar
+            FROM Rating r
+            JOIN User u ON r.username = u.username
+            WHERE r.idProduct = ${idProduct};
+         `;
+
+        let totalRating = 0;
+
+        let ratingCount = [0, 0, 0, 0, 0];
+
+        ratings.forEach(rating => {
+            totalRating += rating.rating;
+            ratingCount[rating.rating - 1]++;
         });
-        res.json(ratings);
+
+        const averageRating = ratings.length > 0 ? totalRating / ratings.length : 0;
+
+
+        const response = {
+            totalRating: ratings.length,
+            averageRating,
+            count: {
+                5: ratingCount[4],
+                4: ratingCount[3],
+                3: ratingCount[2],
+                2: ratingCount[1],
+                1: ratingCount[0],
+            },
+            ratings
+        };
+
+        res.json(response);
     } catch (error) {
-        console.error('Error fetching ratings:', error);
+        console.log('error', error)
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
-
 
 app.post('/api/rating', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
@@ -1016,7 +983,7 @@ app.post('/api/rating', verifyRoles(ROLES_LIST.User), async (req, res) => {
         res.status(201).json({ message: 'Rating added successfully', rating: newRating });
 
     } catch (error) {
-        console.error('Error inserting data:', error);
+        console.log('error', error)
         res.status(500).json({ error: 'Error inserting data' });
     }
 });
@@ -1025,8 +992,12 @@ app.get('/api/rating/:username/:idPayment', verifyRoles(ROLES_LIST.User), async 
     try {
         const { username, idPayment } = req.params;
 
+        const statusPayment = await prisma.historyPayment.findFirst({
+            where: {
+                id: parseInt(idPayment)
+            }
+        });
 
-        // Check if the combination of username and idPayment exists
         const existingRating = await prisma.rating.findFirst({
             where: {
                 username: username,
@@ -1034,39 +1005,28 @@ app.get('/api/rating/:username/:idPayment', verifyRoles(ROLES_LIST.User), async 
             }
         });
 
-        // Check if existingRating exists
         if (existingRating) {
-            // If existingRating is found, return status true along with existingRating
-            res.json({ status: true, existingRating });
+            res.json({ statusGivenRating: true, existingRating });
         } else {
-            // If existingRating is not found, return status false
-            res.json({ status: false });
+            res.json({ statusGivenRating: false, statusPayment: statusPayment.paymentStatus });
         }
 
 
     } catch (error) {
-        console.error('Error inserting data:', error);
-        res.status(500).json({ error: 'Error inserting data' });
-    }
-});
-
-app.get('/api/user', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    try {
-        const user = await prisma.user.findMany();
-        res.json(user);
-    } catch (error) {
         console.log('error', error)
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({ error: 'Error inserting data' });
     }
 });
 
 app.get('/api/user/ranked', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
+
         const users = await prisma.user.findMany({
             orderBy: {
                 healthPoint: 'desc'
             }
         });
+
 
         const rankedUsers = users.map((user, index) => {
             return {
@@ -1082,7 +1042,284 @@ app.get('/api/user/ranked', verifyRoles(ROLES_LIST.User), async (req, res) => {
     }
 });
 
-app.get('/api//user/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.get('/api/challenge', verifyRoles(ROLES_LIST.User), async (req, res) => {
+    try {
+        const challange = await prisma.challenge.findMany();
+        res.json(challange);
+    } catch (error) {
+        console.log('error', error)
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
+    try {
+
+        const today = new Date();
+        today.setDate(today.getDate());
+        // console.log('today', today);
+
+        // const yesterday = new Date();
+        // yesterday.setDate(today.getDate() - 2);
+
+        // console.log('today', today.toLocaleString('en-ID', { timeZone: 'Asia/Jakarta' }))
+        // console.log('yesterday', yesterday.toLocaleString('en-ID', { timeZone: 'Asia/Jakarta' }))
+
+        const todayTimeZone = today.toLocaleString('en-ID', { timeZone: 'Asia/Jakarta' })
+        // const yesterdayTimeZone = yesterday.toLocaleString('en-ID', { timeZone: 'Asia/Jakarta' })
+
+        // const tomorrow = new Date(today);
+        // tomorrow.setDate(today.getDate() - 1);
+
+        // console.log('today', today)
+        // console.log('tomorrow', tomorrow)
+        const formattedDateToday = new Date(todayTimeZone).toISOString().split('T')[0];
+
+
+        // console.log('formattedDateToday', formattedDateToday);
+
+        const orderToday = await prisma.historyPayment.findMany({
+            where: {
+                date: formattedDateToday,
+            },
+        });
+
+        const revenueToday = await prisma.$queryRaw`
+            SELECT SUM(totalPrice) AS totalPriceSum
+            FROM HistoryPayment
+            WHERE paymentStatus = 'Lunas'
+            AND date = ${formattedDateToday}
+         `;
+
+        const { totalPriceSum } = revenueToday[0];
+
+        let formattedRevenue = 0
+        if (totalPriceSum) {
+            formattedRevenue = revenueToday.map(item => {
+                const totalPrice = item.totalPriceSum.toLocaleString('id-ID', {
+                    style: 'currency',
+                    currency: 'IDR'
+                });
+                return totalPrice;
+            });
+        } else {
+            formattedRevenue = ['Rp. 0']
+        }
+
+
+        const productCounts = await prisma.$queryRaw`
+            SELECT idProduct
+            FROM HistoryPayment
+            WHERE paymentStatus = 'Lunas'
+      `;
+
+
+        const counts = productCounts.reduce((acc, curr) => {
+            if ([3, 4, 5, 10, 11, 12, 13].includes(curr.idProduct)) {
+                acc.lapanganBadmintonCount++;
+            } else if ([2, 9].includes(curr.idProduct)) {
+                acc.lapanganFutsalCount++;
+            } else if ([1, 6, 7, 8, 14, 15].includes(curr.idProduct)) {
+                acc.lapanganBasketCount++;
+            } else if ([20, 21].includes(curr.idProduct)) {
+                acc.gym++;
+            } else if ([16, 17, 18, 19].includes(curr.idProduct)) {
+                acc.kolamRenang++;
+            }
+            return acc;
+        }, { lapanganBadmintonCount: 0, lapanganFutsalCount: 0, lapanganBasketCount: 0, gym: 0, kolamRenang: 0 });
+
+
+        const todayWeek = new Date();
+
+        const startOfWeek = new Date(todayWeek);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        const endOfWeek = new Date(todayWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+        // console.log('startOfWeek', startOfWeek)
+        // console.log('endOfWeek', endOfWeek)
+
+
+        // Format start date and end date to match the date format in your database
+        const formattedStartDate = startOfWeek.toISOString().slice(0, 10);
+        const formattedEndDate = endOfWeek.toISOString().slice(0, 10);
+
+        // console.log('formattedStartDate', formattedStartDate)
+        // console.log('formattedEndDate', formattedEndDate)
+
+
+        const dates = [];
+        let currentDate = new Date(formattedStartDate);
+        const end = new Date(formattedEndDate);
+        while (currentDate <= end) {
+            dates.push(currentDate.toISOString().slice(0, 10));
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        const reservationCount = await prisma.$queryRaw`
+            SELECT *
+            FROM HistoryPayment
+            WHERE date >= ${formattedStartDate} AND date <= ${formattedEndDate}
+
+      `;
+
+        // console.log('reservationCount', reservationCount)
+        const countPerDate = {};
+        // console.log('dates', dates)
+
+        // Iterate over dates array
+        dates.forEach(date => {
+            // Check if the date exists in payments array
+            const count = reservationCount.filter(payment => payment.date === date).length;
+            // Store the count in countPerDate object
+            countPerDate[date] = count;
+        });
+
+        const arrOfTotalPrice = {};
+
+        // console.log('dates xx', dates)
+
+        dates.forEach(date => {
+            arrOfTotalPrice[date] = 0;
+        });
+
+        const reservationCountLunas = await prisma.$queryRaw`
+        SELECT *
+        FROM HistoryPayment
+        WHERE date >= ${formattedStartDate} AND date <= ${formattedEndDate}
+        AND paymentStatus = 'Lunas'
+
+        `;
+
+        reservationCountLunas.forEach(reservation => {
+            const { date, totalPrice } = reservation;
+            arrOfTotalPrice[date] += parseInt(totalPrice);
+        });
+
+
+
+        // console.log('dates', dates)
+        // console.log('countPerDate', countPerDate)
+        // console.log('arrOfTotalPrice', arrOfTotalPrice)
+
+
+
+        const totalReservationsToday = orderToday.length
+        const totalRevenue = formattedRevenue
+        const totalProductsBySport = counts
+        const arrOrderThisWeek = [countPerDate, dates]
+        const arrRevenueThisWeek = [arrOfTotalPrice, dates]
+
+
+        res.json({
+            totalReservationsToday,
+            totalRevenue,
+            totalProductsBySport,
+            arrOrderThisWeek,
+            arrRevenueThisWeek
+        });
+    } catch (error) {
+        console.log('error', error)
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/api/order', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
+    try {
+        const order = await prisma.$queryRaw`
+            SELECT p.nameDetail AS productName, hp.*
+            FROM Product p
+            INNER JOIN HistoryPayment hp ON p.id = hp.idProduct
+            ORDER BY hp.id DESC;
+        `;
+        res.json(order);
+    } catch (error) {
+        console.log('error', error)
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/api/order/:id', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
+
+    const orderId = parseInt(req.params.id);
+
+    try {
+        const order = await prisma.$queryRaw`
+            SELECT p.name AS productName, hp.*
+            FROM Product p
+            INNER JOIN HistoryPayment hp ON p.id = hp.idProduct
+            WHERE hp.id = ${orderId}
+            ORDER BY hp.id DESC;
+        `;
+
+        res.json(order);
+    } catch (error) {
+        console.log('error', error)
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.post('/api/order/:id/update', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
+    const orderId = parseInt(req.params.id);
+    const { paymentStatus } = req.body;
+
+    try {
+
+        const updateOrder = await prisma.historyPayment.update({
+            where: { id: orderId },
+            data: {
+                paymentStatus,
+            }
+        });
+        let user = []
+
+        if (paymentStatus === 'Lunas') {
+            user = await prisma.user.update({
+                where: { username: updateOrder.username },
+                data: {
+                    healthPoint: {
+                        increment: parseInt(updateOrder.totalHp),
+                    },
+                    experiencePoint: {
+                        increment: parseInt(updateOrder.totalXp),
+                    },
+                    attackPoint: {
+                        increment: parseInt(updateOrder.totalAttack),
+                    },
+                    defensePoint: {
+                        increment: parseInt(updateOrder.totalDefense),
+                    },
+                },
+            });
+        } else if (paymentStatus === 'Batal') {
+            user = await prisma.schedule.deleteMany({
+                where: {
+                    cancelId: updateOrder.cancelId,
+                },
+            });
+
+        }
+
+
+        res.json({ message: 'Order updated successfully', order: updateOrder, user: user });
+    } catch (error) {
+        console.log('error', error)
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/api/user', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
+    try {
+        const user = await prisma.user.findMany();
+        res.json(user);
+    } catch (error) {
+        console.log('error', error)
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/api/user/:id', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
     try {
         const userId = parseInt(req.params.id);
         const user = await prisma.user.findUnique({
@@ -1097,48 +1334,23 @@ app.get('/api//user/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
 
         res.json(user);
     } catch (error) {
+        console.log('error', error)
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
-app.post('/api/user/add', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    const { username, password, phoneNumber } = req.body;
-    console.log(req.body)
-    try {
-        const newUser = await prisma.user.create({
-            data: {
-                username,
-                password,
-                phoneNumber
-            }
-        });
-
-        res.status(201).json({ message: 'User added successfully', product: newUser });
-    } catch (error) {
-        console.error('Error adding user:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.post('/api/user/:id/update', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.post('/api/user/:id/update', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
     const userId = parseInt(req.params.id);
-    const { username, password, phoneNumber } = req.body;
-    console.log(req.body);
+    const { username, phoneNumber, biayaPendaftaranMembershipGym, biayaPendaftaranMembershipBadminton } = req.body;
+
     try {
-        const existingUser = await prisma.user.findUnique({
-            where: { id: userId }
-        });
-
-        if (!existingUser) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-
         const updateUser = await prisma.user.update({
             where: { id: userId },
             data: {
-                username: username || existingUser.username,
-                password: password,
-                phoneNumber: phoneNumber
+                username: username,
+                phoneNumber: phoneNumber,
+                biayaPendaftaranMembershipGym: biayaPendaftaranMembershipGym === 'true' ? true : false,
+                biayaPendaftaranMembershipBadminton: biayaPendaftaranMembershipBadminton === 'true' ? true : false
             }
         });
 
@@ -1149,7 +1361,7 @@ app.post('/api/user/:id/update', verifyRoles(ROLES_LIST.User), async (req, res) 
     }
 });
 
-app.delete('/api/user/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
+app.delete('/api/user/:id', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
     const userId = parseInt(req.params.id);
     try {
         const existingUser = await prisma.user.findUnique({
@@ -1166,222 +1378,11 @@ app.delete('/api/user/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
 
         res.json({ message: 'User deleted successfully' });
     } catch (error) {
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.get('/api/product', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    try {
-        const product = await prisma.product.findMany();
-        console.log(product);
-        res.json(product);
-    } catch (error) {
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.get('/api/product/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    try {
-        const productId = parseInt(req.params.id);
-        console.log('productId', productId)
-        const product = await prisma.product.findUnique({
-            where: {
-                id: productId
-            }
-        });
-
-        console.log('product', product)
-
-        if (!product) {
-            return res.status(404).json({ error: 'Product not found' });
-        }
-
-        res.json(product);
-    } catch (error) {
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.post('/api/product/add', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    const { name, gor, price } = req.body;
-
-    try {
-        const newProduct = await prisma.product.create({
-            data: {
-                name,
-                gor: parseInt(gor),
-                price
-            }
-        });
-
-        res.status(201).json({ message: 'Product added successfully', product: newProduct });
-    } catch (error) {
-        console.error('Error adding product:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.post('/api/product/:id/update', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    const productId = parseInt(req.params.id);
-    const { name, gor, price } = req.body; // Assuming these are the fields you want to update
-    console.log(req.body)
-    try {
-        const existingProduct = await prisma.product.findUnique({
-            where: { id: productId }
-        });
-
-        if (!existingProduct) {
-            return res.status(404).json({ error: 'Product not found' });
-        }
-
-        const updateProduct = await prisma.product.update({
-            where: { id: productId },
-            data: {
-                name: name || existingProduct.name,
-                gor: parseInt(gor) || existingProduct.gor,
-                price: price || existingProduct.price,
-            }
-        });
-
-        res.json({ message: 'Product updated successfully', product: updateProduct });
-    } catch (error) {
         console.log('error', error)
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
-app.delete('/api//product/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    const productId = parseInt(req.params.id);
-    console.log('productId', productId)
-    try {
-        const existingProduct = await prisma.product.findUnique({
-            where: { id: productId }
-        });
-
-        if (!existingProduct) {
-            return res.status(404).json({ error: 'Product not found' });
-        }
-
-        await prisma.product.delete({
-            where: { id: productId }
-        });
-
-        res.json({ message: 'Product deleted successfully' });
-    } catch (error) {
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.get('/api/challenge', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    try {
-        const challange = await prisma.challenge.findMany();
-        res.json(challange);
-    } catch (error) {
-        console.log('error', error)
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.get('/api/challenge/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    try {
-        const challengeId = parseInt(req.params.id);
-        console.log('challengeId', challengeId)
-        const challenge = await prisma.challenge.findUnique({
-            where: {
-                id: challengeId
-            }
-        });
-
-        console.log('challange', challenge)
-
-        if (!challenge) {
-            return res.status(404).json({ error: 'Challenge not found' });
-        }
-
-        res.json(challenge);
-    } catch (error) {
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.post('/api/challenge/add', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    const { description, repeatTime } = req.body;
-
-    try {
-        const newChallenge = await prisma.challenge.create({
-            data: {
-                description,
-                repeatTime
-            }
-        });
-
-        res.status(201).json({ message: 'Challenge added successfully', challenge: newChallenge });
-    } catch (error) {
-        console.error('Error adding challenge:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.post('/api/challenge/:id/update', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    const challengeId = parseInt(req.params.id);
-    const { description, repeatTime } = req.body; // Assuming these are the fields you want to update
-
-    try {
-        const existingChallenge = await prisma.challenge.findUnique({
-            where: { id: challengeId }
-        });
-
-        if (!existingChallenge) {
-            return res.status(404).json({ error: 'Challenge not found' });
-        }
-
-        const updatedChallenge = await prisma.challenge.update({
-            where: { id: challengeId },
-            data: {
-                description: description || existingChallenge.description,
-                repeatTime: repeatTime || existingChallenge.repeatTime,
-            }
-        });
-
-        res.json({ message: 'Challenge updated successfully', challenge: updatedChallenge });
-    } catch (error) {
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.delete('/api/challenge/:id', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    const challangeId = parseInt(req.params.id);
-    console.log('challangeId', challangeId)
-    try {
-        const existingChallange = await prisma.challenge.findUnique({
-            where: { id: challangeId }
-        });
-
-        if (!existingChallange) {
-            return res.status(404).json({ error: 'Challange not found' });
-        }
-
-        await prisma.challenge.delete({
-            where: { id: challangeId }
-        });
-
-        res.json({ message: 'challenge deleted successfully' });
-    } catch (error) {
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-
-app.get('/api/journals', verifyRoles(ROLES_LIST.User), async (req, res) => {
-    try {
-        const journals = await prisma.journal.findMany();
-        res.json(journals);
-    } catch (error) {
-        console.error('Error fetching journals:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Update user status to sleep
 const updateStatusDailyReward = async () => {
     try {
         const updatedUsers = await prisma.user.updateMany({
@@ -1397,9 +1398,63 @@ const updateStatusDailyReward = async () => {
 
 };
 
+const updateStatusWeeklyChallange = async () => {
+    try {
+        const updatedUsers = await prisma.user.updateMany({
+            data: {
+                statusWeeklyChallange: false
+            }
+        });
+
+        console.log('User statusWeeklyChallange updated successfully.');
+    } catch (error) {
+        console.error('Error updating user statusWeeklyChallange:', error);
+    }
+
+};
+
+const updateStatusMonthlyChallange = async () => {
+    try {
+        const updatedUsers = await prisma.user.updateMany({
+            data: {
+                statusMonthlyChallange: false
+            }
+        });
+
+        // console.log('User statusMonthlyChallange updated successfully.');
+    } catch (error) {
+        console.error('Error updating user statusMonthlyChallange:', error);
+    }
+
+};
+
+const updateStatus6MonthChallange = async () => {
+    try {
+        const updatedUsers = await prisma.user.updateMany({
+            data: {
+                status6MonthChallange: false
+            }
+        });
+
+        // console.log('User status6MonthChallange updated successfully.');
+    } catch (error) {
+        console.error('Error updating user status6MonthChallange:', error);
+
+    }
+
+};
+
 cron.schedule('*/1 * * * *', () => {
     updateStatusDailyReward();
+    updateStatusWeeklyChallange();
+    updateStatusMonthlyChallange();
+    updateStatus6MonthChallange();
 });
+
+// cron.schedule('0 0 * * 0', async () => {
+//     console.log('Running scheduled task: Sunday at midnight');
+
+// });
 
 // 0 */2 * * * --> every two hours
 // 0 7 * * * --> every day at 7 morning
