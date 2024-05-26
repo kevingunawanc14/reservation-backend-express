@@ -193,7 +193,10 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-app.use('/Images', express.static(path.join(__dirname, '..', 'images')));
+app.use('/api/images', express.static(path.join(__dirname, '..', 'images')));
+console.log('dirname', __dirname)
+console.log('path', path.join(__dirname, '..', 'images'))
+
 
 app.use(authenticateToken);
 
@@ -201,7 +204,7 @@ app.get('/api/search', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const query = req.query.q
 
     if (!query) {
-        return res.json([]); // Return empty array
+        return res.json([]);
     }
 
     try {
@@ -554,7 +557,6 @@ app.get('/api/user/detail/achievement/:username', verifyRoles(ROLES_LIST.User), 
     const { username } = req.params;
 
     try {
-        // Get counts for different categories
         const sumReservation = await prisma.schedule.count({
             where: {
                 username: username
@@ -597,7 +599,6 @@ app.get('/api/user/detail/achievement/:username', verifyRoles(ROLES_LIST.User), 
             }
         });
 
-        // Send the response with the calculated sums
         res.json({
             sumReservation,
             sumBadminton,
@@ -786,8 +787,6 @@ app.post('/api/order', verifyRoles(ROLES_LIST.User), upload.single('filePaymentP
     // console.log('res:', res);
     // const imageUrl = `/bukti_pembayaran_qris/${req.file.filename}`;
 
-    // Access the uploaded file details (filename, path, etc.) from req.file
-    // res.json({ message: 'File uploaded successfully!' });
     try {
         const {
             idProduct,
@@ -1170,9 +1169,7 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
 
         // Iterate over dates array
         dates.forEach(date => {
-            // Check if the date exists in payments array
             const count = reservationCount.filter(payment => payment.date === date).length;
-            // Store the count in countPerDate object
             countPerDate[date] = count;
         });
 
@@ -1458,6 +1455,8 @@ cron.schedule('*/1 * * * *', () => {
 
 // 0 */2 * * * --> every two hours
 // 0 7 * * * --> every day at 7 morning
+
+/* */
 
 app.listen(PORT, () => {
     console.log("Express API running in port: " + PORT);
