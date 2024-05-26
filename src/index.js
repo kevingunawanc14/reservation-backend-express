@@ -768,7 +768,7 @@ app.get('/api/order/detail/:id', verifyRoles(ROLES_LIST.User), async (req, res) 
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, 'Images')
+        cb(null, 'images')
     },
     filename: (req, file, cb) => {
         cb(null, Date.now() + path.extname(file.originalname))
