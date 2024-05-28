@@ -1056,7 +1056,7 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
         const today = new Date();
         console.log('today', today);
         // today.setDate(today.getDate());
-        console.log('today setDate', today);
+        // console.log('today setDate', today);
 
         // const yesterday = new Date();
         // yesterday.setDate(today.getDate() - 2);
@@ -1064,7 +1064,9 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
         // console.log('today', today.toLocaleString('en-ID', { timeZone: 'Asia/Jakarta' }))
         // console.log('yesterday', yesterday.toLocaleString('en-ID', { timeZone: 'Asia/Jakarta' }))
 
-        const todayTimeZone = today.toLocaleString('en-ID', { timeZone: 'Asia/Jakarta' })
+        let todayTimeZone = today.toLocaleDateString('id-ID', {
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        })
         console.log('todayTimeZone', todayTimeZone);
 
         // const yesterdayTimeZone = yesterday.toLocaleString('en-ID', { timeZone: 'Asia/Jakarta' })
@@ -1074,23 +1076,29 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
 
         // console.log('today', today)
         // console.log('tomorrow', tomorrow)
-        const formattedDateToday = new Date(todayTimeZone).toISOString().split('T')[0];
-        console.log('formattedDateToday', formattedDateToday);
+        // const formattedDateToday = new Date(todayTimeZone).toISOString().split('T')[0];
+        // console.log('formattedDateToday', formattedDateToday);
 
 
         // console.log('formattedDateToday', formattedDateToday);
+        const todayParts = todayTimeZone.split('/');
+        todayTimeZone = `${todayParts[2]}-${todayParts[1]}-${todayParts[0]}`;
 
         const orderToday = await prisma.historyPayment.findMany({
             where: {
-                date: formattedDateToday,
+                date: {
+                    contains: todayTimeZone,
+                },
             },
         });
+
+        // console.log('orderToday', orderToday)
 
         const revenueToday = await prisma.$queryRaw`
             SELECT SUM(totalPrice) AS totalPriceSum
             FROM HistoryPayment
             WHERE paymentStatus = 'Lunas'
-            AND date = ${formattedDateToday}
+            AND date = ${todayTimeZone}
          `;
 
         const { totalPriceSum } = revenueToday[0];
@@ -1134,21 +1142,29 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
 
         const todayWeek = new Date();
 
-        const startOfWeek = new Date(todayWeek);
+        let startOfWeek = new Date(todayWeek);
         startOfWeek.setDate(today.getDate() - today.getDay());
-        const endOfWeek = new Date(todayWeek);
+        let endOfWeek = new Date(todayWeek);
         endOfWeek.setDate(startOfWeek.getDate() + 6);
 
-        // console.log('startOfWeek', startOfWeek)
-        // console.log('endOfWeek', endOfWeek)
+        console.log('startOfWeek', startOfWeek)
+        console.log('endOfWeek', endOfWeek)
 
+        let formattedStartDate = startOfWeek.toLocaleDateString('id-ID', {
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        })
 
-        // Format start date and end date to match the date format in your database
-        const formattedStartDate = startOfWeek.toISOString().slice(0, 10);
-        const formattedEndDate = endOfWeek.toISOString().slice(0, 10);
+        let formattedEndDate = endOfWeek.toLocaleDateString('id-ID', {
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        })
 
-        // console.log('formattedStartDate', formattedStartDate)
-        // console.log('formattedEndDate', formattedEndDate)
+        formattedStartDate = formattedStartDate.split('/');
+        formattedStartDate = `${formattedStartDate[2]}-${formattedStartDate[1]}-${formattedStartDate[0]}`;
+        formattedEndDate = formattedEndDate.split('/');
+        formattedEndDate = `${formattedEndDate[2]}-${formattedEndDate[1]}-${formattedEndDate[0]}`;
+
+        console.log('formattedStartDate', formattedStartDate)
+        console.log('formattedEndDate', formattedEndDate)
 
 
         const dates = [];
@@ -1445,10 +1461,10 @@ const updateStatus6MonthChallange = async () => {
 };
 
 cron.schedule('*/1 * * * *', () => {
-    updateStatusDailyReward();
-    updateStatusWeeklyChallange();
-    updateStatusMonthlyChallange();
-    updateStatus6MonthChallange();
+    // updateStatusDailyReward();
+    // updateStatusWeeklyChallange();
+    // updateStatusMonthlyChallange();
+    // updateStatus6MonthChallange();
 });
 
 // cron.schedule('0 0 * * 0', async () => {
