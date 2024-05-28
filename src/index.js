@@ -765,7 +765,6 @@ app.get('/api/order/detail/:id', verifyRoles(ROLES_LIST.User), async (req, res) 
     }
 });
 
-
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         cb(null, 'images')
@@ -1055,8 +1054,9 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
     try {
 
         const today = new Date();
-        today.setDate(today.getDate());
-        // console.log('today', today);
+        console.log('today', today);
+        // today.setDate(today.getDate());
+        console.log('today setDate', today);
 
         // const yesterday = new Date();
         // yesterday.setDate(today.getDate() - 2);
@@ -1065,6 +1065,8 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
         // console.log('yesterday', yesterday.toLocaleString('en-ID', { timeZone: 'Asia/Jakarta' }))
 
         const todayTimeZone = today.toLocaleString('en-ID', { timeZone: 'Asia/Jakarta' })
+        console.log('todayTimeZone', todayTimeZone);
+
         // const yesterdayTimeZone = yesterday.toLocaleString('en-ID', { timeZone: 'Asia/Jakarta' })
 
         // const tomorrow = new Date(today);
@@ -1073,6 +1075,7 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
         // console.log('today', today)
         // console.log('tomorrow', tomorrow)
         const formattedDateToday = new Date(todayTimeZone).toISOString().split('T')[0];
+        console.log('formattedDateToday', formattedDateToday);
 
 
         // console.log('formattedDateToday', formattedDateToday);
