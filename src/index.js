@@ -577,7 +577,7 @@ app.get('/api/user/detail/stat/:username', verifyRoles(ROLES_LIST.User), async (
             ORDER BY productCount DESC;
             ;
         `;
-        const typeSport = mostPlayedSport[0].idProduct > 16 ? "Individual" : "Team";
+        const typeSport = mostPlayedSport[0]?.idProduct > 16 ? "Individual" : "Team";
 
         res.status(200).json({
             totalMinuteWorkout: totalMinuteWorkout,
