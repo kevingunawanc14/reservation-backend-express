@@ -194,8 +194,6 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.use('/api/images', express.static(path.join(__dirname, '..', 'images')));
-console.log('dirname', __dirname)
-console.log('path', path.join(__dirname, '..', 'images'))
 
 
 app.use(authenticateToken);
@@ -1440,7 +1438,7 @@ const updateStatusDailyReward = async () => {
             }
         });
 
-        console.log('User statusDailyReward updated successfully.');
+        // console.log('User statusDailyReward updated successfully.');
     } catch (error) {
         console.error('Error updating user statusDailyReward:', error);
     }
@@ -1455,7 +1453,7 @@ const updateStatusWeeklyChallange = async () => {
             }
         });
 
-        console.log('User statusWeeklyChallange updated successfully.');
+        // console.log('User statusWeeklyChallange updated successfully.');
     } catch (error) {
         console.error('Error updating user statusWeeklyChallange:', error);
     }
