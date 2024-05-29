@@ -232,28 +232,83 @@ app.get('/api/progressive-challange/:username', verifyRoles(ROLES_LIST.User), as
         const endOfWeek = new Date(today);
         endOfWeek.setDate(startOfWeek.getDate() + 6);
 
+        let formattedStartDate = startOfWeek.toLocaleDateString('id-ID', {
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        })
+
+        let formattedEndDate = endOfWeek.toLocaleDateString('id-ID', {
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        })
+
+        formattedStartDate = formattedStartDate.split('/');
+        formattedStartDate = `${formattedStartDate[2]}-${formattedStartDate[1]}-${formattedStartDate[0]}`;
+        formattedEndDate = formattedEndDate.split('/');
+        formattedEndDate = `${formattedEndDate[2]}-${formattedEndDate[1]}-${formattedEndDate[0]}`;
+
         const scheduleCountWeekly = await prisma.schedule.count({
             where: {
                 username: username,
-                AND: [
-                    { date: { gte: startOfWeek.toISOString() } },
-                    { date: { lte: endOfWeek.toISOString() } }
-                ]
-            }
+                date: {
+                    gte: formattedStartDate,
+                    lte: formattedEndDate,
+                },
+                idProduct: {
+                    lte: 15,
+                },
+                paymentStatus: 'Lunas'
+
+            },
         });
 
+        const scheduleCountWeekly1 = await prisma.schedule.findMany({
+            where: {
+                username: username,
+                date: {
+                    gte: formattedStartDate,
+                    lte: formattedEndDate,
+                },
+                idProduct: {
+                    lte: 15,
+                },
+                paymentStatus: 'Lunas'
+
+            },
+            select: {
+                date: true,
+                username: true,
+                paymentStatus: true,
+            },
+        });
 
         const startOfMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
         const endOfMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
 
+        let formattedstartOfMonth = startOfMonth.toLocaleDateString('id-ID', {
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        })
+
+        let formattedendOfMonth = endOfMonth.toLocaleDateString('id-ID', {
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        })
+
+        formattedstartOfMonth = formattedstartOfMonth.split('/');
+        formattedstartOfMonth = `${formattedstartOfMonth[2]}-${formattedstartOfMonth[1]}-${formattedstartOfMonth[0]}`;
+        formattedendOfMonth = formattedendOfMonth.split('/');
+        formattedendOfMonth = `${formattedendOfMonth[2]}-${formattedendOfMonth[1]}-${formattedendOfMonth[0]}`;
+
         const scheduleCountMonthly = await prisma.schedule.count({
             where: {
                 username: username,
-                AND: [
-                    { date: { gte: startOfMonth.toISOString() } },
-                    { date: { lte: endOfMonth.toISOString() } }
-                ]
-            }
+                date: {
+                    gte: formattedstartOfMonth,
+                    lte: formattedendOfMonth,
+                },
+                idProduct: {
+                    lte: 15,
+                },
+                paymentStatus: 'Lunas'
+
+            },
         });
 
         const currentMonth = today.getMonth() + 1;
@@ -267,14 +322,32 @@ app.get('/api/progressive-challange/:username', verifyRoles(ROLES_LIST.User), as
             endOfYear = new Date(Date.UTC(today.getUTCFullYear(), 11, 31));
         }
 
+        let formattedstartOfYear = startOfYear.toLocaleDateString('id-ID', {
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        })
+
+        let formattedendOfYear = endOfYear.toLocaleDateString('id-ID', {
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        })
+
+        formattedstartOfYear = formattedstartOfYear.split('/');
+        formattedstartOfYear = `${formattedstartOfYear[2]}-${formattedstartOfYear[1]}-${formattedstartOfYear[0]}`;
+        formattedendOfYear = formattedendOfYear.split('/');
+        formattedendOfYear = `${formattedendOfYear[2]}-${formattedendOfYear[1]}-${formattedendOfYear[0]}`;
+
         const scheduleCount6Month = await prisma.schedule.count({
             where: {
                 username: username,
-                AND: [
-                    { date: { gte: startOfYear.toISOString() } },
-                    { date: { lte: endOfYear.toISOString() } }
-                ]
-            }
+                date: {
+                    gte: formattedstartOfMonth,
+                    lte: formattedendOfMonth,
+                },
+                idProduct: {
+                    lte: 15,
+                },
+                paymentStatus: 'Lunas'
+
+            },
         });
 
         res.status(200).json({
@@ -291,7 +364,6 @@ app.get('/api/progressive-challange/:username', verifyRoles(ROLES_LIST.User), as
 app.post('/api/claim-reward/:username', verifyRoles(ROLES_LIST.User), async (req, res) => {
     const username = req.params.username;
     const { valueReward, type } = req.body;
-    // console.log('req.body', req.body)
     try {
         let fieldToUpdate;
         switch (type) {
@@ -422,7 +494,6 @@ app.post('/api/attack/:username', verifyRoles(ROLES_LIST.User), async (req, res)
     const { username } = req.params;
     const userLogin = req.user
 
-    // console.log(username)
     try {
         const user = await prisma.user.findUnique({ where: { username: username } });
 
@@ -485,24 +556,36 @@ app.get('/api/user/detail/:username', verifyRoles(ROLES_LIST.User), async (req, 
 
 app.get('/api/user/detail/stat/:username', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
+        const { username } = req.params;
         const totalMinuteWorkout = await prisma.schedule.count({
             where: {
-                idProduct: { lte: 16 }
-            }
-        }); const mostPlayedSport = await prisma.$queryRaw`
-            SELECT s.idProduct, p.name AS productName, COUNT(s.idProduct) AS productCount
+                username: username,
+                idProduct: {
+                    lte: 16,
+                },
+                paymentStatus: 'Lunas'
+
+            },
+        });
+
+        const mostPlayedSport = await prisma.$queryRaw`
+            SELECT idProduct, COUNT(idProduct) AS productCount, p.name AS productName
             FROM Schedule s
             JOIN Product p ON s.idProduct = p.id
-            GROUP BY s.idProduct, p.name
-            ORDER BY productCount DESC
-            LIMIT 1;
+            WHERE username = ${username}
+            AND 
+            paymentStatus = 'Lunas'
+            GROUP BY idProduct
+            ORDER BY productCount DESC;
+            ;
         `;
         const typeSport = mostPlayedSport[0].idProduct > 16 ? "Individual" : "Team";
 
         res.status(200).json({
             totalMinuteWorkout: totalMinuteWorkout,
             mostPlayedSport: mostPlayedSport[0].productName,
-            typeSport: typeSport
+            typeSport: typeSport,
+            totalStreak: 1
         });
 
     } catch (error) {
@@ -559,7 +642,8 @@ app.get('/api/user/detail/achievement/:username', verifyRoles(ROLES_LIST.User), 
     try {
         const sumReservation = await prisma.schedule.count({
             where: {
-                username: username
+                username: username,
+                paymentStatus: 'Lunas'
             }
         });
 
@@ -568,7 +652,9 @@ app.get('/api/user/detail/achievement/:username', verifyRoles(ROLES_LIST.User), 
                 username: username,
                 idProduct: {
                     in: [3, 4, 5, 10, 11, 12, 13]
-                }
+                },
+                paymentStatus: 'Lunas'
+
             }
         });
 
@@ -577,7 +663,8 @@ app.get('/api/user/detail/achievement/:username', verifyRoles(ROLES_LIST.User), 
                 username: username,
                 idProduct: {
                     in: [2, 9]
-                }
+                },
+                paymentStatus: 'Lunas'
             }
         });
 
@@ -586,7 +673,8 @@ app.get('/api/user/detail/achievement/:username', verifyRoles(ROLES_LIST.User), 
                 username: username,
                 idProduct: {
                     in: [1, 6, 7, 8, 14, 15]
-                }
+                },
+                paymentStatus: 'Lunas'
             }
         });
 
@@ -595,7 +683,8 @@ app.get('/api/user/detail/achievement/:username', verifyRoles(ROLES_LIST.User), 
                 username: username,
                 idProduct: {
                     in: [20, 21]
-                }
+                },
+                paymentStatus: 'Lunas'
             }
         });
 
@@ -645,7 +734,6 @@ app.post('/api/update-avatar', verifyRoles(ROLES_LIST.User), async (req, res) =>
     try {
         const { activeAvatar } = req.body;
         const username = req.user
-        // console.log('activeAvatar', activeAvatar)
 
         const updatedUser = await prisma.user.update({
             where: {
@@ -713,8 +801,6 @@ app.post('/api/buy-theme', verifyRoles(ROLES_LIST.User), async (req, res) => {
 app.post('/api/update-theme', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
         const { activeTheme, username } = req.body;
-        // console.log('activeTheme', activeTheme)
-        // console.log('username', username)
 
         const updatedUser = await prisma.user.update({
             where: {
@@ -750,14 +836,11 @@ app.get('/api/order/detail/:id', verifyRoles(ROLES_LIST.User), async (req, res) 
             SELECT * FROM Schedule
             WHERE connectHistory = ${connectHistory};
         `;
-        console.log('detailOrder', detailOrder)
-        console.log('detailOrder.length', detailOrder.length)
 
         if (detailOrder.length == 0) {
             return res.status(404).json({ status: 'fail', message: `Please refresh the page reservation already canceled` });
 
         }
-        // console.log('detailOrder', detailOrder);
         res.json(detailOrder);
     } catch (error) {
         console.log('error', error)
@@ -776,15 +859,10 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage })
 
-app.post('/api/order', verifyRoles(ROLES_LIST.User), upload.single('filePaymentProve'), async (req, res) => {
-    // console.log('Uploaded file:', req.file);
-    // console.log('req:', req);
-    // console.log('req.file.filename:', req.file.filename);
-    // console.log('check2')
-
-    // console.log('req:', req);
-    // console.log('res:', res);
-    // const imageUrl = `/bukti_pembayaran_qris/${req.file.filename}`;
+app.post('/api/order', verifyRoles(ROLES_LIST.User), upload.fields([
+    { name: 'filePaymentProve', maxCount: 1 },
+    { name: 'foto', maxCount: 1 }
+]), async (req, res) => {
 
     try {
         const {
@@ -793,9 +871,9 @@ app.post('/api/order', verifyRoles(ROLES_LIST.User), upload.single('filePaymentP
             hour,
             paymentStatus,
             paymentMethod,
+            note,
             totalPrice,
             date,
-            detailDate,
             typeBreath,
             minuteBreath,
             totalXp,
@@ -804,25 +882,13 @@ app.post('/api/order', verifyRoles(ROLES_LIST.User), upload.single('filePaymentP
             totalDefense,
             connectHistory,
             cancelId,
+            createdAtDate,
+            createdAtDateFull,
+            subscriptionType
         } = req.body;
 
         const hourArray = hour.split(',');
 
-
-        // console.log('typeBreath', typeBreath)
-        // console.log('minuteBreath', minuteBreath)
-        // console.log('totalXp', totalXp)
-        // console.log('totalHp', totalHp)
-        // console.log('totalAttack', totalAttack)
-        // console.log('totalDefense', totalDefense)
-        // console.log('totalPrice', totalPrice)
-        // console.log('paymentMethod', paymentMethod)
-        console.log('hourArray', hourArray)
-        console.log('date', date)
-
-        console.log('req.body', req.body);
-
-        // Check if any hour in the array is already booked
         for (const hour of hourArray) {
             const existingSchedule = await prisma.schedule.findFirst({
                 where: {
@@ -883,6 +949,7 @@ app.post('/api/order', verifyRoles(ROLES_LIST.User), upload.single('filePaymentP
                             username: productId === parseInt(idProduct) ? username : undefined,
                             hour: h,
                             date,
+                            paymentStatus: productId === parseInt(idProduct) ? paymentStatus : undefined,
                             connectHistory: productId === parseInt(idProduct) ? connectHistory : null,
                             cancelId
                         }
@@ -900,7 +967,7 @@ app.post('/api/order', verifyRoles(ROLES_LIST.User), upload.single('filePaymentP
                 date,
                 paymentMethod,
                 paymentStatus,
-                detailDate,
+                note,
                 connectHistory,
                 typeBreath,
                 minuteBreath: minuteBreath.toString(),
@@ -909,8 +976,11 @@ app.post('/api/order', verifyRoles(ROLES_LIST.User), upload.single('filePaymentP
                 totalAttack: totalAttack.toString(),
                 totalDefense: totalDefense.toString(),
                 totalPrice: String(totalPrice),
-                paymentProveImagePath: paymentMethod === 'qris' ? req.file.filename : undefined,
-                cancelId
+                paymentProveImagePath: paymentMethod === 'qris' ? req.files['filePaymentProve'][0].filename : undefined,
+                membershipKTPImagePath: subscriptionType === 'membership' ? req.files['foto'][0].filename : undefined,
+                cancelId,
+                createdAtDate,
+                createdAtDateFull
             },
         });
 
@@ -1054,51 +1124,25 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
     try {
 
         const today = new Date();
-        console.log('today', today);
-        // today.setDate(today.getDate());
-        // console.log('today setDate', today);
-
-        // const yesterday = new Date();
-        // yesterday.setDate(today.getDate() - 2);
-
-        // console.log('today', today.toLocaleString('en-ID', { timeZone: 'Asia/Jakarta' }))
-        // console.log('yesterday', yesterday.toLocaleString('en-ID', { timeZone: 'Asia/Jakarta' }))
 
         let todayTimeZone = today.toLocaleDateString('id-ID', {
             year: 'numeric', month: '2-digit', day: '2-digit'
         })
-        console.log('todayTimeZone', todayTimeZone);
 
-        // const yesterdayTimeZone = yesterday.toLocaleString('en-ID', { timeZone: 'Asia/Jakarta' })
-
-        // const tomorrow = new Date(today);
-        // tomorrow.setDate(today.getDate() - 1);
-
-        // console.log('today', today)
-        // console.log('tomorrow', tomorrow)
-        // const formattedDateToday = new Date(todayTimeZone).toISOString().split('T')[0];
-        // console.log('formattedDateToday', formattedDateToday);
-
-
-        // console.log('formattedDateToday', formattedDateToday);
         const todayParts = todayTimeZone.split('/');
         todayTimeZone = `${todayParts[2]}-${todayParts[1]}-${todayParts[0]}`;
 
         const orderToday = await prisma.historyPayment.findMany({
             where: {
-                date: {
-                    contains: todayTimeZone,
-                },
+                createdAtDate: todayTimeZone
             },
         });
-
-        // console.log('orderToday', orderToday)
 
         const revenueToday = await prisma.$queryRaw`
             SELECT SUM(totalPrice) AS totalPriceSum
             FROM HistoryPayment
             WHERE paymentStatus = 'Lunas'
-            AND date = ${todayTimeZone}
+            AND createdAtDate = ${todayTimeZone}
          `;
 
         const { totalPriceSum } = revenueToday[0];
@@ -1147,8 +1191,6 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
         let endOfWeek = new Date(todayWeek);
         endOfWeek.setDate(startOfWeek.getDate() + 6);
 
-        console.log('startOfWeek', startOfWeek)
-        console.log('endOfWeek', endOfWeek)
 
         let formattedStartDate = startOfWeek.toLocaleDateString('id-ID', {
             year: 'numeric', month: '2-digit', day: '2-digit'
@@ -1163,10 +1205,6 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
         formattedEndDate = formattedEndDate.split('/');
         formattedEndDate = `${formattedEndDate[2]}-${formattedEndDate[1]}-${formattedEndDate[0]}`;
 
-        console.log('formattedStartDate', formattedStartDate)
-        console.log('formattedEndDate', formattedEndDate)
-
-
         const dates = [];
         let currentDate = new Date(formattedStartDate);
         const end = new Date(formattedEndDate);
@@ -1176,50 +1214,36 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
         }
 
         const reservationCount = await prisma.$queryRaw`
-            SELECT *
+            SELECT createdAtDate
             FROM HistoryPayment
-            WHERE date >= ${formattedStartDate} AND date <= ${formattedEndDate}
+            WHERE createdAtDate >= ${formattedStartDate} AND createdAtDate <= ${formattedEndDate}
 
       `;
 
-        // console.log('reservationCount', reservationCount)
         const countPerDate = {};
-        // console.log('dates', dates)
-
-        // Iterate over dates array
         dates.forEach(date => {
-            const count = reservationCount.filter(payment => payment.date === date).length;
+            const count = reservationCount.filter(payment => payment.createdAtDate === date).length;
             countPerDate[date] = count;
         });
 
         const arrOfTotalPrice = {};
-
-        // console.log('dates xx', dates)
 
         dates.forEach(date => {
             arrOfTotalPrice[date] = 0;
         });
 
         const reservationCountLunas = await prisma.$queryRaw`
-        SELECT *
+        SELECT createdAtDate,totalPrice
         FROM HistoryPayment
-        WHERE date >= ${formattedStartDate} AND date <= ${formattedEndDate}
+        WHERE createdAtDate >= ${formattedStartDate} AND createdAtDate <= ${formattedEndDate}
         AND paymentStatus = 'Lunas'
 
         `;
 
         reservationCountLunas.forEach(reservation => {
-            const { date, totalPrice } = reservation;
-            arrOfTotalPrice[date] += parseInt(totalPrice);
+            const { createdAtDate, totalPrice } = reservation;
+            arrOfTotalPrice[createdAtDate] += parseInt(totalPrice);
         });
-
-
-
-        // console.log('dates', dates)
-        // console.log('countPerDate', countPerDate)
-        // console.log('arrOfTotalPrice', arrOfTotalPrice)
-
-
 
         const totalReservationsToday = orderToday.length
         const totalRevenue = formattedRevenue
@@ -1306,6 +1330,15 @@ app.post('/api/order/:id/update', verifyRoles(ROLES_LIST.Admin), async (req, res
                     defensePoint: {
                         increment: parseInt(updateOrder.totalDefense),
                     },
+                },
+            });
+            await prisma.schedule.updateMany({
+                where: {
+                    username: updateOrder.username,
+                    cancelId: updateOrder.cancelId
+                },
+                data: {
+                    paymentStatus: 'Lunas'
                 },
             });
         } else if (paymentStatus === 'Batal') {
@@ -1461,10 +1494,10 @@ const updateStatus6MonthChallange = async () => {
 };
 
 cron.schedule('*/1 * * * *', () => {
-    // updateStatusDailyReward();
-    // updateStatusWeeklyChallange();
-    // updateStatusMonthlyChallange();
-    // updateStatus6MonthChallange();
+    updateStatusDailyReward();
+    updateStatusWeeklyChallange();
+    updateStatusMonthlyChallange();
+    updateStatus6MonthChallange();
 });
 
 // cron.schedule('0 0 * * 0', async () => {

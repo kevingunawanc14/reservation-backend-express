@@ -53,6 +53,7 @@ model Schedule {
   username                      String?
   hour                          String?
   date                          String?
+  paymentStatus                 String?
   connectHistory                String?
   cancelId                      String?
 }
@@ -62,11 +63,12 @@ model HistoryPayment {
     username                      String?
     idProduct                     Int?
     date                          String?
-    detailDate                    String?
     totalPrice                    String?
     paymentMethod                 String?
     paymentStatus                 String?
     paymentProveImagePath         String?
+    membershipKTPImagePath        String?
+    note                          String?
     typeBreath                    String?
     minuteBreath                  String?
     totalXp                       String?
@@ -75,6 +77,8 @@ model HistoryPayment {
     totalDefense                  String?
     connectHistory                String?
     cancelId                      String?
+    createdAtDate                 String?
+    createdAtDateFull             String?
 }
 
 model HistoryAvatar {
