@@ -1130,7 +1130,7 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
 
         const todayParts = todayTimeZone.split('/');
         todayTimeZone = `${todayParts[2]}-${todayParts[1]}-${todayParts[0]}`;
-
+        console.log('todayTimeZone',todayTimeZone)
         const orderToday = await prisma.historyPayment.findMany({
             where: {
                 createdAtDate: todayTimeZone
