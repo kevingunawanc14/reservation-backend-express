@@ -577,11 +577,12 @@ app.get('/api/user/detail/stat/:username', verifyRoles(ROLES_LIST.User), async (
             ORDER BY productCount DESC;
             ;
         `;
+        console.log('mostPlayedSport',mostPlayedSport)
         const typeSport = mostPlayedSport[0]?.idProduct > 16 ? "Individual" : "Team";
 
         res.status(200).json({
             totalMinuteWorkout: totalMinuteWorkout,
-            mostPlayedSport: mostPlayedSport[0].productName,
+            mostPlayedSport: mostPlayedSport[0]?.productName,
             typeSport: typeSport,
             totalStreak: 1
         });
