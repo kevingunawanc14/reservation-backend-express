@@ -225,18 +225,21 @@ app.get('/api/progressive-challange/:username', verifyRoles(ROLES_LIST.User), as
     try {
         const today = new Date();
 
+        let options = {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            timeZone: 'Asia/Jakarta'
+        };
+
         const startOfWeek = new Date(today);
         startOfWeek.setDate(today.getDate() - today.getDay());
         const endOfWeek = new Date(today);
         endOfWeek.setDate(startOfWeek.getDate() + 6);
 
-        let formattedStartDate = startOfWeek.toLocaleDateString('id-ID', {
-            year: 'numeric', month: '2-digit', day: '2-digit'
-        })
+        let formattedStartDate = startOfWeek.toLocaleDateString('id-ID', options)
 
-        let formattedEndDate = endOfWeek.toLocaleDateString('id-ID', {
-            year: 'numeric', month: '2-digit', day: '2-digit'
-        })
+        let formattedEndDate = endOfWeek.toLocaleDateString('id-ID', options)
 
         formattedStartDate = formattedStartDate.split('/');
         formattedStartDate = `${formattedStartDate[2]}-${formattedStartDate[1]}-${formattedStartDate[0]}`;
@@ -1128,7 +1131,7 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',
-            timeZone: 'Asia/Jakarta' 
+            timeZone: 'Asia/Jakarta'
         };
 
         let todayTimeZone = today.toLocaleDateString('id-ID', options)
@@ -1189,20 +1192,19 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
 
 
         const todayWeek = new Date();
-
+        console.log('todayWeek',todayWeek)
         let startOfWeek = new Date(todayWeek);
         startOfWeek.setDate(today.getDate() - today.getDay());
         let endOfWeek = new Date(todayWeek);
         endOfWeek.setDate(startOfWeek.getDate() + 6);
 
 
-        let formattedStartDate = startOfWeek.toLocaleDateString('id-ID', {
-            year: 'numeric', month: '2-digit', day: '2-digit'
-        })
+        let formattedStartDate = startOfWeek.toLocaleDateString('id-ID', options)
+        console.log('formattedStartDate', formattedStartDate)
 
-        let formattedEndDate = endOfWeek.toLocaleDateString('id-ID', {
-            year: 'numeric', month: '2-digit', day: '2-digit'
-        })
+        let formattedEndDate = endOfWeek.toLocaleDateString('id-ID', options)
+        console.log('formattedEndDate', formattedEndDate)
+
 
         formattedStartDate = formattedStartDate.split('/');
         formattedStartDate = `${formattedStartDate[2]}-${formattedStartDate[1]}-${formattedStartDate[0]}`;
