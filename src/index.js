@@ -234,8 +234,11 @@ app.get('/api/progressive-challange/:username', verifyRoles(ROLES_LIST.User), as
 
         const startOfWeek = new Date(today);
         startOfWeek.setDate(today.getDate() - today.getDay());
-        const endOfWeek = new Date(today);
+        const endOfWeek = new Date(startOfWeek);
         endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+
+
 
         let formattedStartDate = startOfWeek.toLocaleDateString('id-ID', options)
 
@@ -874,6 +877,7 @@ app.post('/api/order', verifyRoles(ROLES_LIST.User), upload.fields([
             paymentStatus,
             paymentMethod,
             note,
+            jumlahOrang,
             totalPrice,
             date,
             typeBreath,
@@ -970,6 +974,7 @@ app.post('/api/order', verifyRoles(ROLES_LIST.User), upload.fields([
                 paymentMethod,
                 paymentStatus,
                 note,
+                jumlahOrang: ['6', '7', '14', '15'].includes(idProduct) ? jumlahOrang : undefined,
                 connectHistory,
                 typeBreath,
                 minuteBreath: minuteBreath.toString(),
@@ -1138,7 +1143,6 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
 
         const todayParts = todayTimeZone.split('/');
         todayTimeZone = `${todayParts[2]}-${todayParts[1]}-${todayParts[0]}`;
-        console.log('todayTimeZone', todayTimeZone)
         const orderToday = await prisma.historyPayment.findMany({
             where: {
                 createdAtDate: todayTimeZone
@@ -1192,18 +1196,15 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
 
 
         const todayWeek = new Date();
-        console.log('todayWeek',todayWeek)
         let startOfWeek = new Date(todayWeek);
         startOfWeek.setDate(today.getDate() - today.getDay());
-        let endOfWeek = new Date(todayWeek);
+        let endOfWeek = new Date(startOfWeek);
         endOfWeek.setDate(startOfWeek.getDate() + 6);
 
 
         let formattedStartDate = startOfWeek.toLocaleDateString('id-ID', options)
-        console.log('formattedStartDate', formattedStartDate)
 
         let formattedEndDate = endOfWeek.toLocaleDateString('id-ID', options)
-        console.log('formattedEndDate', formattedEndDate)
 
 
         formattedStartDate = formattedStartDate.split('/');

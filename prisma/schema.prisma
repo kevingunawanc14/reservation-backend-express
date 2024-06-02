@@ -69,6 +69,7 @@ model HistoryPayment {
     paymentProveImagePath         String?
     membershipKTPImagePath        String?
     note                          String?
+    jumlahOrang                   String?
     typeBreath                    String?
     minuteBreath                  String?
     totalXp                       String?
