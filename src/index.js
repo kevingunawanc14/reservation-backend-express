@@ -161,6 +161,7 @@ app.post('/api/login', async (req, res) => {
         const foundUser = await prisma.user.findUnique({
             where: {
                 username: username,
+                statusAktif: true
             },
         });
 
@@ -1006,7 +1007,8 @@ app.get('/api/ratings/:idProduct', verifyRoles(ROLES_LIST.User), async (req, res
             SELECT r.*, u.username, u.activeAvatar
             FROM Rating r
             JOIN User u ON r.username = u.username
-            WHERE r.idProduct = ${idProduct};
+            WHERE r.idProduct = ${idProduct}
+            AND r.statusAktif = 1;
          `;
 
         let totalRating = 0;
@@ -1097,6 +1099,9 @@ app.get('/api/user/ranked', verifyRoles(ROLES_LIST.User), async (req, res) => {
     try {
 
         const users = await prisma.user.findMany({
+            where: {
+                statusAktif: true
+            },
             orderBy: {
                 healthPoint: 'desc'
             }
@@ -1367,7 +1372,11 @@ app.post('/api/order/:id/update', verifyRoles(ROLES_LIST.Admin), async (req, res
 
 app.get('/api/user', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
     try {
-        const user = await prisma.user.findMany();
+        const user = await prisma.user.findMany({
+            where: {
+                statusAktif: true
+            }
+        });
         res.json(user);
     } catch (error) {
         console.log('error', error)
@@ -1428,11 +1437,43 @@ app.delete('/api/user/:id', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        await prisma.user.delete({
-            where: { id: userId }
+        await prisma.user.update({
+            where: { id: userId },
+            data: { statusAktif: false }
         });
 
         res.json({ message: 'User deleted successfully' });
+    } catch (error) {
+        console.log('error', error)
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/api/rating', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
+    try {
+        const rating = await prisma.$queryRaw`
+            SELECT Rating.*, Product.name as productName 
+            FROM Rating 
+            JOIN Product ON Rating.idProduct = Product.id 
+            WHERE Rating.statusAktif = true
+        `;
+        res.json(rating);
+    } catch (error) {
+        console.log('error', error)
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.delete('/api/rating/:id', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
+    const ratingId = parseInt(req.params.id);
+    try {
+
+        await prisma.rating.update({
+            where: { id: ratingId },
+            data: { statusAktif: false }
+        });
+
+        res.json({ message: 'Rating deleted successfully' });
     } catch (error) {
         console.log('error', error)
         res.status(500).json({ error: 'Internal Server Error' });

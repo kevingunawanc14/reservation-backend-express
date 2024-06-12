@@ -38,11 +38,11 @@ model User {
   defensePoint                        Int? @default(0)
   activeTheme                         String? @default("Light")
   activeAvatar                        String? @default("GiMuscleFat")
-  krakatauCoin                        Int? @default(0)
   statusWeeklyChallange               Boolean? @default(false)
   statusMonthlyChallange              Boolean? @default(false)
   status6MonthChallange               Boolean? @default(false)
   statusDailyReward                   Boolean? @default(false)
+  statusAktif                         Boolean? @default(true)
   biayaPendaftaranMembershipGym       Boolean? @default(false)
   biayaPendaftaranMembershipBadminton Boolean? @default(false)
 }
@@ -102,6 +102,7 @@ model Rating{
   username  String
   rating    Int
   description String
+  statusAktif Boolean? @default(true)
   idPayment Int
 }
 
