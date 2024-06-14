@@ -14,6 +14,7 @@ const bcrypt = require('bcrypt');
 const cron = require('node-cron');
 const multer = require('multer');
 const path = require('path');
+const Pusher = require('pusher');
 
 
 const authenticateToken = (req, res, next) => {
@@ -73,6 +74,15 @@ const credentials = (req, res, next) => {
     }
     next();
 }
+
+const pusher = new Pusher({
+    appId: "1819356",
+    key: "5f32af0ccd95b9fc2649",
+    secret: "8c0669e186e807e8b3b1",
+    cluster: "ap1",
+    useTLS: true
+});
+
 
 app.use(credentials);
 app.use(cors(corsOptions));
@@ -183,6 +193,7 @@ app.post('/api/login', async (req, res) => {
                     { expiresIn: '1d' }
                 );
 
+
             res.json({ token, username: foundUser.username });
         } else {
             res.sendStatus(401);
@@ -237,9 +248,6 @@ app.get('/api/progressive-challange/:username', verifyRoles(ROLES_LIST.User), as
         startOfWeek.setDate(today.getDate() - today.getDay());
         const endOfWeek = new Date(startOfWeek);
         endOfWeek.setDate(startOfWeek.getDate() + 6);
-
-
-
 
         let formattedStartDate = startOfWeek.toLocaleDateString('id-ID', options)
 
@@ -547,6 +555,7 @@ app.get('/api/user/detail/:username', verifyRoles(ROLES_LIST.User), async (req, 
                 username: username
             }
         });
+
 
         if (user) {
             res.json(user);
@@ -891,7 +900,8 @@ app.post('/api/order', verifyRoles(ROLES_LIST.User), upload.fields([
             cancelId,
             createdAtDate,
             createdAtDateFull,
-            subscriptionType
+            subscriptionType,
+            productName
         } = req.body;
 
         const hourArray = hour.split(',');
@@ -990,6 +1000,11 @@ app.post('/api/order', verifyRoles(ROLES_LIST.User), upload.fields([
                 createdAtDate,
                 createdAtDateFull
             },
+        });
+
+
+        pusher.trigger('admin-channel', 'user-order', {
+            message: `${productName} - ${username} `
         });
 
         res.status(201).json({ message: 'Order added successfully', order: historyPayment });
