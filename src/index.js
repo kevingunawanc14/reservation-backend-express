@@ -593,8 +593,8 @@ app.get('/api/user/detail/stat/:username', verifyRoles(ROLES_LIST.User), async (
             ORDER BY productCount DESC;
             ;
         `;
-        console.log('mostPlayedSport', mostPlayedSport)
-        const typeSport = mostPlayedSport[0]?.idProduct > 16 ? "Individual" : "Team";
+        // console.log('mostPlayedSport', mostPlayedSport)
+        const typeSport = mostPlayedSport.length === 0 ? "" : (mostPlayedSport[0]?.idProduct > 16 ? "Individual" : "Team");
 
         res.status(200).json({
             totalMinuteWorkout: totalMinuteWorkout,
@@ -904,6 +904,10 @@ app.post('/api/order', verifyRoles(ROLES_LIST.User), upload.fields([
             productName
         } = req.body;
 
+        // console.log('jumlahOrang', jumlahOrang)
+        // console.log('idProduct', idProduct)
+
+
         const hourArray = hour.split(',');
 
         for (const hour of hourArray) {
@@ -985,7 +989,7 @@ app.post('/api/order', verifyRoles(ROLES_LIST.User), upload.fields([
                 paymentMethod,
                 paymentStatus,
                 note,
-                jumlahOrang: ['6', '7', '14', '15'].includes(idProduct) ? jumlahOrang : undefined,
+                jumlahOrang: ['6', '7', '14', '15', '16', '17', '20'].includes(idProduct) ? jumlahOrang : undefined,
                 connectHistory,
                 typeBreath,
                 minuteBreath: minuteBreath.toString(),
@@ -1150,30 +1154,23 @@ app.get('/api/challenge', verifyRoles(ROLES_LIST.User), async (req, res) => {
 app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
     try {
 
-        const today = new Date();
+        const { startDate, endDate } = req.query;
 
-        let options = {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            timeZone: 'Asia/Jakarta'
-        };
-
-        let todayTimeZone = today.toLocaleDateString('id-ID', options)
-
-        const todayParts = todayTimeZone.split('/');
-        todayTimeZone = `${todayParts[2]}-${todayParts[1]}-${todayParts[0]}`;
         const orderToday = await prisma.historyPayment.findMany({
             where: {
-                createdAtDate: todayTimeZone
-            },
+                createdAtDate: {
+                    gte: startDate,
+                    lte: endDate
+                }
+            }
         });
 
         const revenueToday = await prisma.$queryRaw`
             SELECT SUM(totalPrice) AS totalPriceSum
             FROM HistoryPayment
             WHERE paymentStatus = 'Lunas'
-            AND createdAtDate = ${todayTimeZone}
+            AND createdAtDate >= ${startDate}
+            AND createdAtDate <= ${endDate}
          `;
 
         const { totalPriceSum } = revenueToday[0];
@@ -1196,6 +1193,8 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
             SELECT idProduct
             FROM HistoryPayment
             WHERE paymentStatus = 'Lunas'
+            AND createdAtDate >= ${startDate}
+            AND createdAtDate <= ${endDate}
       `;
 
 
@@ -1215,35 +1214,22 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
         }, { lapanganBadmintonCount: 0, lapanganFutsalCount: 0, lapanganBasketCount: 0, gym: 0, kolamRenang: 0 });
 
 
-        const todayWeek = new Date();
-        let startOfWeek = new Date(todayWeek);
-        startOfWeek.setDate(today.getDate() - today.getDay());
-        let endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 6);
-
-
-        let formattedStartDate = startOfWeek.toLocaleDateString('id-ID', options)
-
-        let formattedEndDate = endOfWeek.toLocaleDateString('id-ID', options)
-
-
-        formattedStartDate = formattedStartDate.split('/');
-        formattedStartDate = `${formattedStartDate[2]}-${formattedStartDate[1]}-${formattedStartDate[0]}`;
-        formattedEndDate = formattedEndDate.split('/');
-        formattedEndDate = `${formattedEndDate[2]}-${formattedEndDate[1]}-${formattedEndDate[0]}`;
-
         const dates = [];
-        let currentDate = new Date(formattedStartDate);
-        const end = new Date(formattedEndDate);
-        while (currentDate <= end) {
-            dates.push(currentDate.toISOString().slice(0, 10));
-            currentDate.setDate(currentDate.getDate() + 1);
+
+        const startDateDate = new Date(startDate);
+        const endDateDate = new Date(endDate);
+
+        while (startDateDate <= endDateDate) {
+            const formattedDate = startDateDate.toISOString().split('T')[0];
+            dates.push(formattedDate);
+            startDateDate.setDate(startDateDate.getDate() + 1);
         }
+
 
         const reservationCount = await prisma.$queryRaw`
             SELECT createdAtDate
             FROM HistoryPayment
-            WHERE createdAtDate >= ${formattedStartDate} AND createdAtDate <= ${formattedEndDate}
+            WHERE createdAtDate >= ${startDate} AND createdAtDate <= ${endDate}
 
       `;
 
@@ -1262,7 +1248,7 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
         const reservationCountLunas = await prisma.$queryRaw`
         SELECT createdAtDate,totalPrice
         FROM HistoryPayment
-        WHERE createdAtDate >= ${formattedStartDate} AND createdAtDate <= ${formattedEndDate}
+        WHERE createdAtDate >= ${startDate} AND createdAtDate <= ${endDate}
         AND paymentStatus = 'Lunas'
 
         `;
@@ -1294,10 +1280,14 @@ app.get('/api/dashboard', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
 
 app.get('/api/order', verifyRoles(ROLES_LIST.Admin), async (req, res) => {
     try {
+        const { startDate, endDate } = req.query;
+
         const order = await prisma.$queryRaw`
             SELECT p.nameDetail AS productName, hp.*
             FROM Product p
             INNER JOIN HistoryPayment hp ON p.id = hp.idProduct
+            WHERE hp.createdAtDate >= ${startDate}
+            AND hp.createdAtDate <= ${endDate}
             ORDER BY hp.id DESC;
         `;
         res.json(order);
@@ -1558,20 +1548,20 @@ const updateStatus6MonthChallange = async () => {
 
 cron.schedule('*/1 * * * *', () => {
     updateStatusDailyReward();
+});
+
+cron.schedule('0 0 * * 0', () => {
     updateStatusWeeklyChallange();
+});
+
+cron.schedule('0 0 1 * *', () => {
     updateStatusMonthlyChallange();
+});
+
+cron.schedule('0 0 1 1,7 *', () => {
     updateStatus6MonthChallange();
 });
 
-// cron.schedule('0 0 * * 0', async () => {
-//     console.log('Running scheduled task: Sunday at midnight');
-
-// });
-
-// 0 */2 * * * --> every two hours
-// 0 7 * * * --> every day at 7 morning
-
-/* */
 
 app.listen(PORT, () => {
     console.log("Express API running in port: " + PORT);
